@@ -9,11 +9,12 @@ bufferViews = []
 accessors = []
 meshes = []
 nodes = []
+
 bufferViews_index = 0
 accessors_index = 0
 byte_offset = 0
 
-xml_files = ["chicken_mesh.xml", "treasure_2.xml"]
+xml_files = ["native_tower_build_hi.xml", "native_tower_build_lo.xml", "native_tower_built_hi.xml", "native_tower_built_lo.xml", "native_tower_start_hi.xml", "native_tower_start_lo.xml"]
 
 for mesh_index, filename in enumerate(xml_files):
     # Load XML
@@ -97,7 +98,6 @@ for mesh_index, filename in enumerate(xml_files):
     buffers_dataL = [
         position_b64, normal_b64, color_b64, uv_b64, index_b64
     ]
-
     buffers_data.extend(buffers_dataL)
 
     # Constants
@@ -106,54 +106,18 @@ for mesh_index, filename in enumerate(xml_files):
     USHORT = 5123
     FLOAT = 5126
 
-    # Precompute decoded lengths
-    position_bytes = len(base64.b64decode(position_b64))
-    normal_bytes   = len(base64.b64decode(normal_b64))
-    color_bytes    = len(base64.b64decode(color_b64))
-    uv_bytes       = len(base64.b64decode(uv_b64))
-    index_bytes    = len(base64.b64decode(index_b64))
-
-    def offset(value):
-        nonlocal byte_offset
-        byte_offset += value
-        return byte_offset-value
-
-    bufferViews.extend([
-        {"buffer": 0, "byteOffset": offset(position_bytes), "byteLength": position_bytes, "target": ARRAY_BUFFER},
-        {"buffer": 0, "byteOffset": offset(normal_bytes),   "byteLength": normal_bytes,   "target": ARRAY_BUFFER},
-        {"buffer": 0, "byteOffset": offset(color_bytes),    "byteLength": color_bytes,    "target": ARRAY_BUFFER},  # COLOR_0
-        {"buffer": 0, "byteOffset": offset(uv_bytes),       "byteLength": uv_bytes,       "target": ARRAY_BUFFER},  # TEXCOORD_0
-        {"buffer": 0, "byteOffset": offset(index_bytes),    "byteLength": index_bytes,    "target": ELEMENT_ARRAY_BUFFER},
-    ])
-
-
-
-    '''
     for i, data in enumerate(buffers_dataL):
         bufferViews.append({
             "buffer": 0,
             "byteOffset": byte_offset,
-            "byteLength": len(base64.b64decode(data))
+            "byteLength": len(base64.b64decode(data)),
+            "target": ARRAY_BUFFER,
         })
         byte_offset += len(base64.b64decode(data))
 
-    bufferViews[bufferViews_index+0]["target"] = ARRAY_BUFFER
-    bufferViews[bufferViews_index+1]["target"] = ARRAY_BUFFER
-    bufferViews[bufferViews_index+2]["target"] = ARRAY_BUFFER
-    bufferViews[bufferViews_index+3]["target"] = ARRAY_BUFFER
     bufferViews[bufferViews_index+4]["target"] = ELEMENT_ARRAY_BUFFER
-    '''
-    '''
-    bufferViews = [
-        {"buffer":0, "byteOffset":0, "byteLength":len(base64.b64decode(position_b64)), "target": ARRAY_BUFFER},
-        {"buffer":0, "byteOffset":len(base64.b64decode(position_b64)), "byteLength":len(base64.b64decode(normal_b64)), "target": ARRAY_BUFFER},
-        {"buffer":0, "byteOffset":..., "byteLength":..., "target": ARRAY_BUFFER},  # for COLOR_0
-        {"buffer":0, "byteOffset":..., "byteLength":..., "target": ARRAY_BUFFER},  # for TEXCOORD_0
-        {"buffer":0, "byteOffset":..., "byteLength":len(base64.b64decode(index_b64)), "target": ELEMENT_ARRAY_BUFFER},
-    ]
-    '''
 
-    # add bounding box
+    # Bounding box
     position_min = [min(positions[i::3]) for i in range(3)]
     position_max = [max(positions[i::3]) for i in range(3)]
 
@@ -191,7 +155,8 @@ for mesh_index, filename in enumerate(xml_files):
     accessors_index += 5
 
 
-#### --------- done
+all_bytes = b"".join(base64.b64decode(b64) for b64 in buffers_data)
+
 
 # Build minimal glTF
 gltf = {
@@ -201,16 +166,12 @@ gltf = {
     "accessors": accessors,
     "meshes": meshes,
     "nodes": nodes,
-    #"scenes": {"nodes": list(range(len(nodes)))}, #[{"nodes": [0]}],
     "scenes": [{"nodes": list(range(len(nodes)))}],
-    #"scene": 0,
-    #"scenes": [{"nodes": [0]}],
 }
 
-
 gltf["buffers"].append({
-    "uri": "data:application/octet-stream;base64," + "".join(buffers_data),
-    "byteLength": byte_offset
+    "uri": "data:application/octet-stream;base64," + base64.b64encode(all_bytes).decode("ascii"),
+    "byteLength": len(all_bytes)
 })
 
 # Save glTF
