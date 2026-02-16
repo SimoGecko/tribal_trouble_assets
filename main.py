@@ -100,8 +100,35 @@ for mesh_index, filename in enumerate(xml_files):
 
     buffers_data.extend(buffers_dataL)
 
-    #bufferViews = []
+    # Constants
+    ARRAY_BUFFER = 34962
+    ELEMENT_ARRAY_BUFFER = 34963
+    USHORT = 5123
+    FLOAT = 5126
 
+    # Precompute decoded lengths
+    position_bytes = len(base64.b64decode(position_b64))
+    normal_bytes   = len(base64.b64decode(normal_b64))
+    color_bytes    = len(base64.b64decode(color_b64))
+    uv_bytes       = len(base64.b64decode(uv_b64))
+    index_bytes    = len(base64.b64decode(index_b64))
+
+    def offset(value):
+        nonlocal byte_offset
+        byte_offset += value
+        return byte_offset-value
+
+    bufferViews.extend([
+        {"buffer": 0, "byteOffset": offset(position_bytes), "byteLength": position_bytes, "target": ARRAY_BUFFER},
+        {"buffer": 0, "byteOffset": offset(normal_bytes),   "byteLength": normal_bytes,   "target": ARRAY_BUFFER},
+        {"buffer": 0, "byteOffset": offset(color_bytes),    "byteLength": color_bytes,    "target": ARRAY_BUFFER},  # COLOR_0
+        {"buffer": 0, "byteOffset": offset(uv_bytes),       "byteLength": uv_bytes,       "target": ARRAY_BUFFER},  # TEXCOORD_0
+        {"buffer": 0, "byteOffset": offset(index_bytes),    "byteLength": index_bytes,    "target": ELEMENT_ARRAY_BUFFER},
+    ])
+
+
+
+    '''
     for i, data in enumerate(buffers_dataL):
         bufferViews.append({
             "buffer": 0,
@@ -109,15 +136,13 @@ for mesh_index, filename in enumerate(xml_files):
             "byteLength": len(base64.b64decode(data))
         })
         byte_offset += len(base64.b64decode(data))
-    ARRAY_BUFFER = 34962
-    ELEMENT_ARRAY_BUFFER = 34963
 
     bufferViews[bufferViews_index+0]["target"] = ARRAY_BUFFER
     bufferViews[bufferViews_index+1]["target"] = ARRAY_BUFFER
     bufferViews[bufferViews_index+2]["target"] = ARRAY_BUFFER
     bufferViews[bufferViews_index+3]["target"] = ARRAY_BUFFER
     bufferViews[bufferViews_index+4]["target"] = ELEMENT_ARRAY_BUFFER
-
+    '''
     '''
     bufferViews = [
         {"buffer":0, "byteOffset":0, "byteLength":len(base64.b64decode(position_b64)), "target": ARRAY_BUFFER},
@@ -128,20 +153,18 @@ for mesh_index, filename in enumerate(xml_files):
     ]
     '''
 
-    # Accessors (simple)
-    accessors.extend([
-        {"bufferView": bufferViews_index+0, "componentType": 5126, "count": len(positions)//3, "type": "VEC3"},
-        {"bufferView": bufferViews_index+1, "componentType": 5126, "count": len(normals)//3,   "type": "VEC3"},
-        {"bufferView": bufferViews_index+2, "componentType": 5126, "count": len(colors)//4,    "type": "VEC4"},
-        {"bufferView": bufferViews_index+3, "componentType": 5126, "count": len(uvs)//2,       "type": "VEC2"},
-        {"bufferView": bufferViews_index+4, "componentType": 5123, "count": len(indices),      "type": "SCALAR"}
-    ])
-
     # add bounding box
     position_min = [min(positions[i::3]) for i in range(3)]
     position_max = [max(positions[i::3]) for i in range(3)]
-    accessors[accessors_index+ 0]["min"] = position_min
-    accessors[accessors_index+ 0]["max"] = position_max
+
+    # Accessors (simple)
+    accessors.extend([
+        {"bufferView": bufferViews_index+0, "componentType": FLOAT,  "count": len(positions)//3, "type": "VEC3", "min": position_min, "max": position_max},
+        {"bufferView": bufferViews_index+1, "componentType": FLOAT,  "count": len(normals)//3,   "type": "VEC3"},
+        {"bufferView": bufferViews_index+2, "componentType": FLOAT,  "count": len(colors)//4,    "type": "VEC4"},
+        {"bufferView": bufferViews_index+3, "componentType": FLOAT,  "count": len(uvs)//2,       "type": "VEC2"},
+        {"bufferView": bufferViews_index+4, "componentType": USHORT, "count": len(indices),      "type": "SCALAR"}
+    ])
 
     meshes.append({
         "name": f"Mesh_{mesh_index}",
