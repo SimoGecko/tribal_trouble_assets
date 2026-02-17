@@ -45,7 +45,17 @@
       "bufferView": 0,
       "componentType": 5126,
       "count": 405,
-      "type": "VEC3"
+      "type": "VEC3",
+      "min": [
+        -1.16239,
+        -1.0216,
+        0.0
+      ],
+      "max": [
+        1.3181,
+        1.02692,
+        3.04929
+      ]
     },
     {
       "bufferView": 1,

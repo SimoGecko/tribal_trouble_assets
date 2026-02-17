@@ -192,7 +192,7 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
     skins = []
     animations = []
 
-    def addAccessor(values, type, data=None):
+    def addAccessor(values, type, extra=None):
         nonlocal raw_buffer
         nonlocal byte_offset
 
@@ -201,13 +201,22 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
 
         N = len(values)
         form = f"<{N}f" if isFloat else f"<{N}H" # <100f = little-endian, 100 floats
-        data = struct.pack(form, *values)
+        data = struct.pack(form, *values) # bytes array
 
         # Constants
         ARRAY_BUFFER = 34962
         ELEMENT_ARRAY_BUFFER = 34963
         USHORT = 5123
         FLOAT = 5126
+        TYPECOUNTS = {
+            "SCALAR": 1,
+            "VEC2": 2,
+            "VEC3": 3,
+            "VEC4": 4,
+            "MAT2": 4,
+            "MAT3": 9,
+            "MAT4": 16,
+        }
 
         alignment = 4 if isFloat else 2
         aligned_offset = (byte_offset + alignment - 1) // alignment * alignment
@@ -220,33 +229,27 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
 
         raw_buffer += data
 
-        bufferViews.append({
+        bufferView = {
             "buffer": 0,
             "byteOffset": byte_offset,
             "byteLength": len(data),
             "target": ARRAY_BUFFER if isFloat else ELEMENT_ARRAY_BUFFER,
-        })
+        }
         byte_offset += len(data)
 
-        typeCounts = {
-            "SCALAR": 1,
-            "VEC2": 2,
-            "VEC3": 3,
-            "VEC4": 4,
-            "MAT2": 4,
-            "MAT3": 9,
-            "MAT4": 16,
-        }
-
-        accessors.append({
-            "bufferView": len(bufferViews)-1,
+        accessor = {
+            "bufferView": len(bufferViews),
             "componentType": FLOAT if isFloat else USHORT, 
-            "count": len(values)//typeCounts[type],
+            "count": len(values) // TYPECOUNTS[type],
             "type": type,
-            # TODO: extra data
-        })
+        }
+        if extra:
+            accessor.update(extra)
 
-        return len(accessors)-1
+        accessorIndex = len(accessors)
+        bufferViews.append(bufferView)
+        accessors.append(accessor)
+        return accessorIndex
 
 
     if skeleton_file:
@@ -267,6 +270,12 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
                 nodesL[parent_index]["children"].append(i)
 
         nodes.extend(nodesL)
+
+        skins.append({
+            "joints": [list(range(len(nodes)))], # indices of nodes that act as bones
+            #"inverseBindMatrices": addAccessor(None), # accessor of 4x4 matrix
+            "skeleton": 0, # node of the hierarchy root
+        })
 
     for animation_index, filename in enumerate(animation_files):
         #frames = parseAnimation(filename, bone_to_index)
@@ -290,18 +299,12 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
                         "NORMAL":     addAccessor(normals, "VEC3f"),
                         "COLOR_0":    addAccessor(colors, "VEC4f"),
                         "TEXCOORD_0": addAccessor(uvs, "VEC2f"),
-                        #"JOINTS_0":   addAccessor(joints, "VEC4u"),
-                        #"WEIGHTS_0":  addAccessor(weights, "SCALARf"),
+                        "JOINTS_0":   addAccessor(joints, "VEC4u"),
+                        "WEIGHTS_0":  addAccessor(weights, "SCALARf"),
                     },
                     "indices": addAccessor(indices, "SCALARu"),
                 }
             ]
-        })
-
-        skins.append({
-            "joints": [list(range(len(nodes)))], # indices of nodes that act as bones
-            #"inverseBindMatrices": addAccessor(None), # accessor of 4x4 matrix
-            "skeleton": 0, # node of the hierarchy root
         })
 
         '''
@@ -319,7 +322,10 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
     # Build minimal glTF
     gltf = {
         "asset": {"version": "2.0"},
-        "buffers": [], # TODO: inline buffer
+        "buffers": [{
+            "uri": "data:application/octet-stream;base64," + base64.b64encode(raw_buffer).decode("ascii"),
+            "byteLength": len(raw_buffer)
+        }],
         "bufferViews": bufferViews,
         "accessors": accessors,
         "meshes": meshes,
@@ -327,12 +333,6 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
         #"skins": skins,
         "scenes": [{"nodes": [0]}], # [{"nodes": list(range(len(nodes)))}],
     }
-
-    gltf["buffers"].append({
-        "uri": "data:application/octet-stream;base64," + base64.b64encode(raw_buffer).decode("ascii"),
-        "byteLength": len(raw_buffer)
-    })
-
 
     #gltf = {k: v for k, v in data.items() if v is not None}
 
