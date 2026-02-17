@@ -181,6 +181,12 @@ def inverseMult(A, B):
     result_flat = result.reshape(-1).tolist()
     return result_flat
 
+def inv(A):
+    matA = np.array(A, dtype=np.float32).reshape(4,4)
+    matA_inv = np.linalg.inv(matA)
+    result_flat = matA_inv.reshape(-1).tolist()
+    return result_flat
+
 def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, animation_files=None):
     raw_buffer = b""
     byte_offset = 0
@@ -196,6 +202,7 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
         nonlocal raw_buffer
         nonlocal byte_offset
 
+        isIndices = type == "SCALARu" # Hacky
         isFloat = type[-1] == "f"
         type = type[:-1]
 
@@ -208,6 +215,7 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
         ELEMENT_ARRAY_BUFFER = 34963
         USHORT = 5123
         FLOAT = 5126
+
         TYPECOUNTS = {
             "SCALAR": 1,
             "VEC2": 2,
@@ -233,7 +241,7 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
             "buffer": 0,
             "byteOffset": byte_offset,
             "byteLength": len(data),
-            "target": ARRAY_BUFFER if isFloat else ELEMENT_ARRAY_BUFFER,
+            "target": ARRAY_BUFFER if not isIndices else ELEMENT_ARRAY_BUFFER,
         }
         byte_offset += len(data)
 
@@ -270,10 +278,11 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
                 nodesL[parent_index]["children"].append(i)
 
         nodes.extend(nodesL)
+        matrices_flat = [f for mat in matrices for f in inv(mat)]
 
         skins.append({
-            "joints": [list(range(len(nodes)))], # indices of nodes that act as bones
-            #"inverseBindMatrices": addAccessor(None), # accessor of 4x4 matrix
+            "joints": list(range(len(nodes))), # indices of nodes that act as bones
+            "inverseBindMatrices": addAccessor(matrices_flat, "MAT4f"), # accessor of 4x4 matrix
             "skeleton": 0, # node of the hierarchy root
         })
 
@@ -300,7 +309,7 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
                         "COLOR_0":    addAccessor(colors, "VEC4f"),
                         "TEXCOORD_0": addAccessor(uvs, "VEC2f"),
                         "JOINTS_0":   addAccessor(joints, "VEC4u"),
-                        "WEIGHTS_0":  addAccessor(weights, "SCALARf"),
+                        "WEIGHTS_0":  addAccessor(weights, "VEC4f"),
                     },
                     "indices": addAccessor(indices, "SCALARu"),
                 }
@@ -314,8 +323,12 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
             #"translation": [0,0,0]  # optional, can move each mesh
         })
         '''
-        nodes[0]["mesh"] = mesh_index
 
+    # HARDCODED
+    nodes[0]["mesh"] = 0
+    nodes[0]["skin"] = 0
+    del nodes[0]["matrix"]
+    nodes[0]["rotation"] = [-0.70710678, 0.0, 0.0, 0.70710678]
 
     # ---- end iteration
 
@@ -330,7 +343,7 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
         "accessors": accessors,
         "meshes": meshes,
         "nodes": nodes,
-        #"skins": skins,
+        "skins": skins,
         "scenes": [{"nodes": [0]}], # [{"nodes": list(range(len(nodes)))}],
     }
 
