@@ -183,6 +183,7 @@ def inverseMult(A, B):
 
 def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, animation_files=None):
     raw_buffer = b""
+    byte_offset = 0
 
     bufferViews = []
     accessors = []
@@ -191,9 +192,62 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
     skins = []
     animations = []
 
-    bufferViews_index = 0
-    accessors_index = 0
-    byte_offset = 0
+    def addAccessor(values, type, data=None):
+        nonlocal raw_buffer
+        nonlocal byte_offset
+
+        isFloat = type[-1] == "f"
+        type = type[:-1]
+
+        N = len(values)
+        form = f"<{N}f" if isFloat else f"<{N}H" # <100f = little-endian, 100 floats
+        data = struct.pack(form, *values)
+
+        # Constants
+        ARRAY_BUFFER = 34962
+        ELEMENT_ARRAY_BUFFER = 34963
+        USHORT = 5123
+        FLOAT = 5126
+
+        alignment = 4 if isFloat else 2
+        aligned_offset = (byte_offset + alignment - 1) // alignment * alignment
+
+        #pad with 0s if needed
+        padding = aligned_offset - byte_offset
+        if padding > 0:
+            raw_buffer += b"\x00" * padding
+            byte_offset += padding
+
+        raw_buffer += data
+
+        bufferViews.append({
+            "buffer": 0,
+            "byteOffset": byte_offset,
+            "byteLength": len(data),
+            "target": ARRAY_BUFFER if isFloat else ELEMENT_ARRAY_BUFFER,
+        })
+        byte_offset += len(data)
+
+        typeCounts = {
+            "SCALAR": 1,
+            "VEC2": 2,
+            "VEC3": 3,
+            "VEC4": 4,
+            "MAT2": 4,
+            "MAT3": 9,
+            "MAT4": 16,
+        }
+
+        accessors.append({
+            "bufferView": len(bufferViews)-1,
+            "componentType": FLOAT if isFloat else USHORT, 
+            "count": len(values)//typeCounts[type],
+            "type": type,
+            # TODO: extra data
+        })
+
+        return len(accessors)-1
+
 
     if skeleton_file:
         names, parents, matrices = parseSkeleton(skeleton_file)
@@ -222,75 +276,9 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
     for mesh_index, filename in enumerate(mesh_files):
         positions, normals, colors, uvs, indices, joints, weights = parseMesh(filename)
 
-        # Helper to convert float/uint lists to bytes
-        def float_to_bytes(floats):
-            form = f"<{len(floats)}f" # <100f = little-endian, 100 floats
-            b = struct.pack(form, *floats)
-            return b
-
-        def uint16_to_bytes(uints):
-            form = f"<{len(uints)}H"
-            b = struct.pack(form, *uints)
-            return b
-
-        # Create buffer data
-        position_b = float_to_bytes(positions)
-        normal_b   = float_to_bytes(normals)
-        color_b    = float_to_bytes(colors)
-        uv_b       = float_to_bytes(uvs)
-        index_b    = uint16_to_bytes(indices)
-        joints_b   = uint16_to_bytes(joints)
-        weights_b  = float_to_bytes(weights)
-
-        # Each bufferView references data inside a buffer (all inline here)
-        buffers_data = [
-            position_b, normal_b, color_b, uv_b, index_b, joints_b, weights_b
-        ]
-
-        # Constants
-        ARRAY_BUFFER = 34962
-        ELEMENT_ARRAY_BUFFER = 34963
-        USHORT = 5123
-        FLOAT = 5126
-
-        def align(n, alignment):
-            return (n + alignment - 1) // alignment * alignment
-
-        # TODO: expand, just like accessors below
-        for i, data in enumerate(buffers_data):
-            isFloat = i!=4 and i!=5 # else ushort
-            aligned_offset = align(byte_offset, 4 if isFloat else 2)
-
-            #pad with 0s if needed
-            padding = aligned_offset - byte_offset
-            if padding > 0:
-                raw_buffer += b"\x00" * padding
-                byte_offset += padding
-
-            raw_buffer += data
-
-            bufferViews.append({
-                "buffer": 0,
-                "byteOffset": byte_offset,
-                "byteLength": len(data),
-                "target": ARRAY_BUFFER if isFloat else ELEMENT_ARRAY_BUFFER,
-            })
-            byte_offset += len(data)
-
         # Bounding box
         position_min = [min(positions[i::3]) for i in range(3)]
         position_max = [max(positions[i::3]) for i in range(3)]
-
-        # Accessors (simple)
-        accessors.extend([
-            {"bufferView": bufferViews_index+0, "componentType": FLOAT,  "count": len(positions)//3, "type": "VEC3", "min": position_min, "max": position_max},
-            {"bufferView": bufferViews_index+1, "componentType": FLOAT,  "count": len(normals)//3,   "type": "VEC3"},
-            {"bufferView": bufferViews_index+2, "componentType": FLOAT,  "count": len(colors)//4,    "type": "VEC4"},
-            {"bufferView": bufferViews_index+3, "componentType": FLOAT,  "count": len(uvs)//2,       "type": "VEC2"},
-            {"bufferView": bufferViews_index+4, "componentType": USHORT, "count": len(indices),      "type": "SCALAR"},
-            {"bufferView": bufferViews_index+5, "componentType": USHORT, "count": len(joints),       "type": "VEC4"},
-            {"bufferView": bufferViews_index+6, "componentType": FLOAT,  "count": len(weights),      "type": "SCALAR"},
-        ])
 
         meshName = Path(filename).stem
         meshes.append({
@@ -298,21 +286,21 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
             "primitives": [
                 {
                     "attributes": {
-                        "POSITION":   accessors_index+0,
-                        "NORMAL":     accessors_index+1,
-                        "COLOR_0":    accessors_index+2,
-                        "TEXCOORD_0": accessors_index+3,
-                        "JOINTS_0":   accessors_index+5,
-                        "WEIGHTS_0":  accessors_index+6,
+                        "POSITION":   addAccessor(positions, "VEC3f", {"min": position_min, "max": position_max}),
+                        "NORMAL":     addAccessor(normals, "VEC3f"),
+                        "COLOR_0":    addAccessor(colors, "VEC4f"),
+                        "TEXCOORD_0": addAccessor(uvs, "VEC2f"),
+                        #"JOINTS_0":   addAccessor(joints, "VEC4u"),
+                        #"WEIGHTS_0":  addAccessor(weights, "SCALARf"),
                     },
-                    "indices": accessors_index+4,
+                    "indices": addAccessor(indices, "SCALARu"),
                 }
             ]
         })
 
         skins.append({
             "joints": [list(range(len(nodes)))], # indices of nodes that act as bones
-            "inverseBindMatrices": 3, # accessor of 4x4 matrix
+            #"inverseBindMatrices": addAccessor(None), # accessor of 4x4 matrix
             "skeleton": 0, # node of the hierarchy root
         })
 
@@ -325,9 +313,6 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
         '''
         nodes[0]["mesh"] = mesh_index
 
-        bufferViews_index += 7
-        accessors_index += 7
-
 
     # ---- end iteration
 
@@ -339,7 +324,7 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
         "accessors": accessors,
         "meshes": meshes,
         "nodes": nodes,
-        "skins": skins,
+        #"skins": skins,
         "scenes": [{"nodes": [0]}], # [{"nodes": list(range(len(nodes)))}],
     }
 
