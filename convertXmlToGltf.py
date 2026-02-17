@@ -79,42 +79,51 @@ def parseSkeleton(filename):
     tree = ET.parse(filename)
     root = tree.getroot()
 
-    boneNames = []
-    parents = []
-    transforms = []
-    boneNameToIndex = {}
-
+    bones_list = []
     for bone in root.find("bones").findall("bone"):
-        name = bone.attrib["name"]
-        parent = bone.attrib["parent"]
+        bones_list.append({
+            "name": bone.attrib["name"],
+            "parent_name": bone.attrib["parent"]
+        })
 
-    for transform in root.find("init_pose").findall("transform"):
-        name = transform.attrib["name"]
-        m00, m10, m20, m30 = float(transform.attrib["m00"]), float(transform.attrib["m10"]), float(transform.attrib["m20"]), float(transform.attrib["m30"])
-        m01, m11, m21, m31 = float(transform.attrib["m01"]), float(transform.attrib["m11"]), float(transform.attrib["m21"]), float(transform.attrib["m31"])
-        m02, m12, m22, m32 = float(transform.attrib["m02"]), float(transform.attrib["m12"]), float(transform.attrib["m22"]), float(transform.attrib["m32"])
-        m03, m13, m23, m33 = float(transform.attrib["m03"]), float(transform.attrib["m13"]), float(transform.attrib["m23"]), float(transform.attrib["m33"])
+    name_to_index = {b["name"]: i for i, b in enumerate(bones_list)}
+    names = [b["name"] for b in bones_list]
+    parents = [name_to_index.get(b["parent_name"], -1) for b in bones_list]
 
-        transforms.extend([m00, m10, m20, m30, m01, m11, m21, m31, m02, m12, m22, m32, m03, m13, m23, m33]) # TODO: row-major?
+    matrices = [None] * len(names)
+    for t in root.find("init_pose").findall("transform"):
+        name = t.attrib["name"]
+        matrix = [
+            float(t.attrib["m00"]), float(t.attrib["m01"]), float(t.attrib["m02"]), float(t.attrib["m03"]),
+            float(t.attrib["m10"]), float(t.attrib["m11"]), float(t.attrib["m12"]), float(t.attrib["m13"]),
+            float(t.attrib["m20"]), float(t.attrib["m21"]), float(t.attrib["m22"]), float(t.attrib["m23"]),
+            float(t.attrib["m30"]), float(t.attrib["m31"]), float(t.attrib["m32"]), float(t.attrib["m33"]),
+        ]
+        matrices[name_to_index[name]] = matrix
 
+    return names, parents, matrices, name_to_index
 
 def parseAnimation(filename):
     tree = ET.parse(filename)
     root = tree.getroot()
 
-    bones = []
-    parents = []
-    transforms = []
+    frames = []
 
+    curr_frame = 0
     for frame in root.findall("frame"):
         index = int(frame.attrib["index"])
+        assert(index == curr_frame)
+        curr_frame += 1
 
-        for transform in frame.findall("transform"):
-            name = transform.attrib["name"]
-            m00, m10, m20, m30 = float(transform.attrib["m00"]), float(transform.attrib["m10"]), float(transform.attrib["m20"]), float(transform.attrib["m30"])
-            m01, m11, m21, m31 = float(transform.attrib["m01"]), float(transform.attrib["m11"]), float(transform.attrib["m21"]), float(transform.attrib["m31"])
-            m02, m12, m22, m32 = float(transform.attrib["m02"]), float(transform.attrib["m12"]), float(transform.attrib["m22"]), float(transform.attrib["m32"])
-            m03, m13, m23, m33 = float(transform.attrib["m03"]), float(transform.attrib["m13"]), float(transform.attrib["m23"]), float(transform.attrib["m33"])
+        for t in frame.findall("transform"):
+            name = t.attrib["name"]
+            matrix = [
+                float(t.attrib["m00"]), float(t.attrib["m01"]), float(t.attrib["m02"]), float(t.attrib["m03"]),
+                float(t.attrib["m10"]), float(t.attrib["m11"]), float(t.attrib["m12"]), float(t.attrib["m13"]),
+                float(t.attrib["m20"]), float(t.attrib["m21"]), float(t.attrib["m22"]), float(t.attrib["m23"]),
+                float(t.attrib["m30"]), float(t.attrib["m31"]), float(t.attrib["m32"]), float(t.attrib["m33"]),
+            ]
+            #matrices[name_to_index[name]] = matrix
 
 def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, animation_files=None):
     raw_buffer = b""
@@ -129,7 +138,21 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
     byte_offset = 0
 
     if skeleton_file:
-        parseSkeleton(skeleton_file)
+        bone_names, bone_parents, bone_transforms, bone_name_to_index = parseSkeleton(skeleton_file)
+
+        # create skeleton
+        nodesL = [{"name": name} for name in bone_names]
+
+        for i in range(len(bone_names)):
+            nodesL[i]["matrix"] = bone_transforms[i]
+
+        for i, parent_index in enumerate(bone_parents):
+            if parent_index != -1:
+                if "children" not in nodesL[parent_index]:
+                    nodesL[parent_index]["children"] = []
+                nodesL[parent_index]["children"].append(i)
+
+        nodes.extend(nodesL)
 
     for mesh_index, filename in enumerate(mesh_files):
         positions, normals, colors, uvs, indices = parseMesh(filename)
@@ -237,6 +260,7 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
         "meshes": meshes,
         "nodes": nodes,
         "scenes": [{"nodes": list(range(len(nodes)))}],
+        #"scenes": [{"nodes": [0]}],
     }
 
     gltf["buffers"].append({
