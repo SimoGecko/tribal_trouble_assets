@@ -36,6 +36,19 @@ def parseMesh(filename):
             z /= length
         return x, y, z
 
+    def cleanJointsAndWeights(js, ws):
+        # remove 0-weight joints. sum duplicate joints. sort decreasing. add padding
+        jw = {}
+        for j, w in zip(js, ws):
+            if w > 0: jw[j] = jw.get(j,0)+w
+        jw = sorted(jw.items(), key=lambda x:-x[1])[:4]
+        js_out = [j for j,w in jw] + [0]*(4-len(jw))
+        ws_out = [w for j,w in jw] + [0]*(4-len(jw))
+        s = sum(ws_out)
+        if s: ws_out = [w/s for w in ws_out]
+        else: js_out, ws_out = [js[0],0,0,0],[1,0,0,0]
+        return js_out, ws_out
+
     # Go through polygons
     for polygon in root.find("polygons").findall("polygon"):
         poly_indices = []
@@ -46,20 +59,23 @@ def parseMesh(filename):
             r, g, b, a = float(vertex.attrib["r"]), float(vertex.attrib["g"]), float(vertex.attrib["b"]), float(vertex.attrib["a"])
             u, v = float(vertex.attrib["u"]), float(vertex.attrib["v"])
             
-            js = [0,0,0,0]
-            ws = [0,0,0,0]
-            for i, skin in enumerate(vertex.findall("skin")):
+            js = []
+            ws = []
+            for skin in vertex.findall("skin"):
                 boneName = skin.attrib["bone"]
                 weight = float(skin.attrib["weight"])
-                js[i] = bone_to_index[boneName]
-                ws[i] = weight
+                assert(weight >= 0 and weight <= 1)
+                assert(boneName in bone_to_index)
+                js.append(bone_to_index[boneName])
+                ws.append(weight)
+
+            js, ws = cleanJointsAndWeights(js, ws)
 
             # Transform data
             #x, y, z = rotate(x, y, z) # rotate X -90 deg to align up
             #nx, ny, nz = rotate(nx, ny, nz)
             nx, ny, nz = normalize(nx, ny, nz)
             v = 1.0 - v # flip uv
-            #ws /= ws.sum(axis=1, keepdims=True) # normalize weights to sum to 1
 
             key = (x, y, z, nx, ny, nz, r, g, b, a, u, v, js[0], js[1], js[2], js[3], ws[0], ws[1], ws[2], ws[3])
             if key not in vertex_map:
