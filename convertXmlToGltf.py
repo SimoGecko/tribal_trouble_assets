@@ -15,6 +15,9 @@ def parseMesh(filename):
     uvs = []
     indices = []
 
+    joints = []
+    weights = []
+
     vertex_map = {}
     current_index = 0
 
@@ -40,8 +43,12 @@ def parseMesh(filename):
             r, g, b, a = float(vertex.attrib["r"]), float(vertex.attrib["g"]), float(vertex.attrib["b"]), float(vertex.attrib["a"])
             u, v = float(vertex.attrib["u"]), float(vertex.attrib["v"])
             
+            for skin in vertex.findall("skin"):
+                bone = skin.attrib["bone"]
+                weight = float(skin.attrib["weight"])
+
             # Transform data
-            x, y, z = rotate(x, y, z)
+            x, y, z = rotate(x, y, z) # rotate X -90 deg to align up
             nx, ny, nz = rotate(nx, ny, nz)
             nx, ny, nz = normalize(nx, ny, nz)
             v = 1.0 - v # flip uv
@@ -69,10 +76,45 @@ def parseMesh(filename):
     return positions, normals, colors, uvs, indices
 
 def parseSkeleton(filename):
-    pass
+    tree = ET.parse(filename)
+    root = tree.getroot()
+
+    boneNames = []
+    parents = []
+    transforms = []
+    boneNameToIndex = {}
+
+    for bone in root.find("bones").findall("bone"):
+        name = bone.attrib["name"]
+        parent = bone.attrib["parent"]
+
+    for transform in root.find("init_pose").findall("transform"):
+        name = transform.attrib["name"]
+        m00, m10, m20, m30 = float(transform.attrib["m00"]), float(transform.attrib["m10"]), float(transform.attrib["m20"]), float(transform.attrib["m30"])
+        m01, m11, m21, m31 = float(transform.attrib["m01"]), float(transform.attrib["m11"]), float(transform.attrib["m21"]), float(transform.attrib["m31"])
+        m02, m12, m22, m32 = float(transform.attrib["m02"]), float(transform.attrib["m12"]), float(transform.attrib["m22"]), float(transform.attrib["m32"])
+        m03, m13, m23, m33 = float(transform.attrib["m03"]), float(transform.attrib["m13"]), float(transform.attrib["m23"]), float(transform.attrib["m33"])
+
+        transforms.extend([m00, m10, m20, m30, m01, m11, m21, m31, m02, m12, m22, m32, m03, m13, m23, m33]) # TODO: row-major?
+
 
 def parseAnimation(filename):
-    pass
+    tree = ET.parse(filename)
+    root = tree.getroot()
+
+    bones = []
+    parents = []
+    transforms = []
+
+    for frame in root.findall("frame"):
+        index = int(frame.attrib["index"])
+
+        for transform in frame.findall("transform"):
+            name = transform.attrib["name"]
+            m00, m10, m20, m30 = float(transform.attrib["m00"]), float(transform.attrib["m10"]), float(transform.attrib["m20"]), float(transform.attrib["m30"])
+            m01, m11, m21, m31 = float(transform.attrib["m01"]), float(transform.attrib["m11"]), float(transform.attrib["m21"]), float(transform.attrib["m31"])
+            m02, m12, m22, m32 = float(transform.attrib["m02"]), float(transform.attrib["m12"]), float(transform.attrib["m22"]), float(transform.attrib["m32"])
+            m03, m13, m23, m33 = float(transform.attrib["m03"]), float(transform.attrib["m13"]), float(transform.attrib["m23"]), float(transform.attrib["m33"])
 
 def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, animation_files=None):
     raw_buffer = b""
@@ -85,6 +127,9 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
     bufferViews_index = 0
     accessors_index = 0
     byte_offset = 0
+
+    if skeleton_file:
+        parseSkeleton(skeleton_file)
 
     for mesh_index, filename in enumerate(mesh_files):
         positions, normals, colors, uvs, indices = parseMesh(filename)
