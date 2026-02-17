@@ -1,3 +1,4 @@
 *.xml
 *.gltf
+!warrior.gltf
 __pycache__/

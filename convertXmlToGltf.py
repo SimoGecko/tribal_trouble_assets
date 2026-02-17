@@ -6,6 +6,8 @@ import math
 from pathlib import Path
 import numpy as np
 
+bone_to_index = None # needed by Mesh and Animation
+
 def parseMesh(filename):
     tree = ET.parse(filename)
     root = tree.getroot()
@@ -44,17 +46,22 @@ def parseMesh(filename):
             r, g, b, a = float(vertex.attrib["r"]), float(vertex.attrib["g"]), float(vertex.attrib["b"]), float(vertex.attrib["a"])
             u, v = float(vertex.attrib["u"]), float(vertex.attrib["v"])
             
-            for skin in vertex.findall("skin"):
-                bone = skin.attrib["bone"]
+            js = [0,0,0,0]
+            ws = [0,0,0,0]
+            for i, skin in enumerate(vertex.findall("skin")):
+                boneName = skin.attrib["bone"]
                 weight = float(skin.attrib["weight"])
+                js[i] = bone_to_index[boneName]
+                ws[i] = weight
 
             # Transform data
             #x, y, z = rotate(x, y, z) # rotate X -90 deg to align up
             #nx, ny, nz = rotate(nx, ny, nz)
             nx, ny, nz = normalize(nx, ny, nz)
             v = 1.0 - v # flip uv
+            #ws /= ws.sum(axis=1, keepdims=True) # normalize weights to sum to 1
 
-            key = (x, y, z, nx, ny, nz, r, g, b, a, u, v)
+            key = (x, y, z, nx, ny, nz, r, g, b, a, u, v, js[0], js[1], js[2], js[3], ws[0], ws[1], ws[2], ws[3])
             if key not in vertex_map:
                 vertex_map[key] = current_index
                 current_index += 1
@@ -62,6 +69,8 @@ def parseMesh(filename):
                 normals.extend([nx, ny, nz])
                 colors.extend([r, g, b, a])
                 uvs.extend([u, v])
+                joints.extend(js)
+                weights.extend(ws)
             
             poly_indices.append(vertex_map[key])
         
@@ -74,7 +83,7 @@ def parseMesh(filename):
             for i in range(1, len(poly_indices)-1):
                 indices.extend([poly_indices[0], poly_indices[i], poly_indices[i+1]])
 
-    return positions, normals, colors, uvs, indices
+    return positions, normals, colors, uvs, indices, joints, weights
 
 def topologicalSort(names, parents, matrices):
     # Topological sort
@@ -116,7 +125,7 @@ def parseSkeleton(filename):
     # Add root node
     names.append("Bip01")
     parentNames.append(None)
-    matrices.append([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]) # TODO: use None, gltF doesn't like identity
+    matrices.append([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]) # TODO: use None, glTF doesn't like identity
 
     for bone in root.find("bones").findall("bone"):
         names.append(bone.attrib["name"])
@@ -146,21 +155,31 @@ def parseAnimation(filename):
 
     frames = []
 
-    curr_frame = 0
     for frame in root.findall("frame"):
         index = int(frame.attrib["index"])
-        assert(index == curr_frame)
-        curr_frame += 1
+        assert(index == len(frames))
 
+        frames[index] = [None] * len(bone_to_index)
         for t in frame.findall("transform"):
             name = t.attrib["name"]
+            #assert(name == names[len(matrices)])
             matrix = [
                 float(t.attrib["m00"]), float(t.attrib["m01"]), float(t.attrib["m02"]), float(t.attrib["m03"]),
                 float(t.attrib["m10"]), float(t.attrib["m11"]), float(t.attrib["m12"]), float(t.attrib["m13"]),
                 float(t.attrib["m20"]), float(t.attrib["m21"]), float(t.attrib["m22"]), float(t.attrib["m23"]),
                 float(t.attrib["m30"]), float(t.attrib["m31"]), float(t.attrib["m32"]), float(t.attrib["m33"]),
             ]
-            #matrices[name_to_index[name]] = matrix
+            frames[index][bone_to_index[name]] = matrix
+    return frames
+
+def inverseMult(A, B):
+    matA = np.array(A, dtype=np.float32).reshape(4,4)
+    matB = np.array(B, dtype=np.float32).reshape(4,4)
+    matA_inv = np.linalg.inv(matA)
+    #result = matA_inv @ matB
+    result = matB @ matA_inv # For some reason, this is what's needed
+    result_flat = result.reshape(-1).tolist()
+    return result_flat
 
 def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, animation_files=None):
     raw_buffer = b""
@@ -169,6 +188,8 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
     accessors = []
     meshes = []
     nodes = []
+    skins = []
+    animations = []
 
     bufferViews_index = 0
     accessors_index = 0
@@ -176,18 +197,11 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
 
     if skeleton_file:
         names, parents, matrices = parseSkeleton(skeleton_file)
+        global bone_to_index
+        bone_to_index = {name: i for i, name in enumerate(names)}
 
         # create skeleton
         nodesL = [{"name": name} for name in names]
-
-        def inverseMult(A, B):
-            matA = np.array(A, dtype=np.float32).reshape(4,4)
-            matB = np.array(B, dtype=np.float32).reshape(4,4)
-            matA_inv = np.linalg.inv(matA)
-            #result = matA_inv @ matB
-            result = matB @ matA_inv # For some reason, this is what's needed
-            result_flat = result.reshape(-1).tolist()
-            return result_flat
 
         for i in range(len(names)):
             nodesL[i]["matrix"] = inverseMult(matrices[parents[i]], matrices[i]) if parents[i] != -1 else matrices[i]
@@ -200,8 +214,13 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
 
         nodes.extend(nodesL)
 
+    for animation_index, filename in enumerate(animation_files):
+        #frames = parseAnimation(filename, bone_to_index)
+        pass
+
+
     for mesh_index, filename in enumerate(mesh_files):
-        positions, normals, colors, uvs, indices = parseMesh(filename)
+        positions, normals, colors, uvs, indices, joints, weights = parseMesh(filename)
 
         # Helper to convert float/uint lists to bytes
         def float_to_bytes(floats):
@@ -220,10 +239,12 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
         color_b    = float_to_bytes(colors)
         uv_b       = float_to_bytes(uvs)
         index_b    = uint16_to_bytes(indices)
+        joints_b   = uint16_to_bytes(joints)
+        weights_b  = float_to_bytes(weights)
 
         # Each bufferView references data inside a buffer (all inline here)
         buffers_data = [
-            position_b, normal_b, color_b, uv_b, index_b
+            position_b, normal_b, color_b, uv_b, index_b, joints_b, weights_b
         ]
 
         # Constants
@@ -237,7 +258,7 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
 
         # TODO: expand, just like accessors below
         for i, data in enumerate(buffers_data):
-            isFloat = i!=4 # else ushort
+            isFloat = i!=4 and i!=5 # else ushort
             aligned_offset = align(byte_offset, 4 if isFloat else 2)
 
             #pad with 0s if needed
@@ -266,7 +287,9 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
             {"bufferView": bufferViews_index+1, "componentType": FLOAT,  "count": len(normals)//3,   "type": "VEC3"},
             {"bufferView": bufferViews_index+2, "componentType": FLOAT,  "count": len(colors)//4,    "type": "VEC4"},
             {"bufferView": bufferViews_index+3, "componentType": FLOAT,  "count": len(uvs)//2,       "type": "VEC2"},
-            {"bufferView": bufferViews_index+4, "componentType": USHORT, "count": len(indices),      "type": "SCALAR"}
+            {"bufferView": bufferViews_index+4, "componentType": USHORT, "count": len(indices),      "type": "SCALAR"},
+            {"bufferView": bufferViews_index+5, "componentType": USHORT, "count": len(joints),       "type": "VEC4"},
+            {"bufferView": bufferViews_index+6, "componentType": FLOAT,  "count": len(weights),      "type": "SCALAR"},
         ])
 
         meshName = Path(filename).stem
@@ -279,10 +302,18 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
                         "NORMAL":     accessors_index+1,
                         "COLOR_0":    accessors_index+2,
                         "TEXCOORD_0": accessors_index+3,
+                        "JOINTS_0":   accessors_index+5,
+                        "WEIGHTS_0":  accessors_index+6,
                     },
                     "indices": accessors_index+4,
                 }
             ]
+        })
+
+        skins.append({
+            "joints": [list(range(len(nodes)))], # indices of nodes that act as bones
+            "inverseBindMatrices": 3, # accessor of 4x4 matrix
+            "skeleton": 0, # node of the hierarchy root
         })
 
         '''
@@ -294,8 +325,8 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
         '''
         nodes[0]["mesh"] = mesh_index
 
-        bufferViews_index += 5
-        accessors_index += 5
+        bufferViews_index += 7
+        accessors_index += 7
 
 
     # ---- end iteration
@@ -303,13 +334,13 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
     # Build minimal glTF
     gltf = {
         "asset": {"version": "2.0"},
-        "buffers": [],
+        "buffers": [], # TODO: inline buffer
         "bufferViews": bufferViews,
         "accessors": accessors,
         "meshes": meshes,
         "nodes": nodes,
-        #"scenes": [{"nodes": list(range(len(nodes)))}],
-        "scenes": [{"nodes": [0]}],
+        "skins": skins,
+        "scenes": [{"nodes": [0]}], # [{"nodes": list(range(len(nodes)))}],
     }
 
     gltf["buffers"].append({
@@ -319,7 +350,6 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
 
 
     #gltf = {k: v for k, v in data.items() if v is not None}
-
 
     # Save glTF
     with open(f"{name}.gltf", "w") as f:
