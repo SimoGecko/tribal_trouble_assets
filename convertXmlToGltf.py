@@ -5,7 +5,7 @@ import base64
 import math
 from pathlib import Path
 
-def parseModel(filename):
+def parseMesh(filename):
     tree = ET.parse(filename)
     root = tree.getroot()
 
@@ -68,14 +68,15 @@ def parseModel(filename):
 
     return positions, normals, colors, uvs, indices
 
-def parseSkeleton():
+def parseSkeleton(filename):
     pass
 
-def parseAnimation():
+def parseAnimation(filename):
     pass
 
 def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, animation_files=None):
-    buffers_data = []
+    raw_buffer = b""
+
     bufferViews = []
     accessors = []
     meshes = []
@@ -86,29 +87,30 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
     byte_offset = 0
 
     for mesh_index, filename in enumerate(mesh_files):
-        positions, normals, colors, uvs, indices = parseModel(filename)
+        positions, normals, colors, uvs, indices = parseMesh(filename)
 
-        # Helper to convert float lists to base64
-        def float_to_b64(floats):
-            b = struct.pack("<" + "f"*len(floats), *floats)
-            return base64.b64encode(b).decode('ascii')
+        # Helper to convert float/uint lists to bytes
+        def float_to_bytes(floats):
+            form = f"<{len(floats)}f" # <100f = little-endian, 100 floats
+            b = struct.pack(form, *floats)
+            return b
 
-        def uint16_to_b64(uints):
-            b = struct.pack("<" + "H"*len(uints), *uints)
-            return base64.b64encode(b).decode('ascii')
+        def uint16_to_bytes(uints):
+            form = f"<{len(uints)}H"
+            b = struct.pack(form, *uints)
+            return b
 
         # Create buffer data
-        position_b64 = float_to_b64(positions)
-        normal_b64   = float_to_b64(normals)
-        color_b64    = float_to_b64(colors)
-        uv_b64       = float_to_b64(uvs)
-        index_b64    = uint16_to_b64(indices)
+        position_b = float_to_bytes(positions)
+        normal_b   = float_to_bytes(normals)
+        color_b    = float_to_bytes(colors)
+        uv_b       = float_to_bytes(uvs)
+        index_b    = uint16_to_bytes(indices)
 
         # Each bufferView references data inside a buffer (all inline here)
-        buffers_dataL = [
-            position_b64, normal_b64, color_b64, uv_b64, index_b64
+        buffers_data = [
+            position_b, normal_b, color_b, uv_b, index_b
         ]
-        buffers_data.extend(buffers_dataL)
 
         # Constants
         ARRAY_BUFFER = 34962
@@ -116,17 +118,29 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
         USHORT = 5123
         FLOAT = 5126
 
+        def align(n, alignment):
+            return (n + alignment - 1) // alignment * alignment
+
         # TODO: expand, just like accessors below
-        for i, data in enumerate(buffers_dataL):
+        for i, data in enumerate(buffers_data):
+            isFloat = i!=4 # else ushort
+            aligned_offset = align(byte_offset, 4 if isFloat else 2)
+
+            #pad with 0s if needed
+            padding = aligned_offset - byte_offset
+            if padding > 0:
+                raw_buffer += b"\x00" * padding
+                byte_offset += padding
+
+            raw_buffer += data
+
             bufferViews.append({
                 "buffer": 0,
                 "byteOffset": byte_offset,
-                "byteLength": len(base64.b64decode(data)),
-                "target": ARRAY_BUFFER,
+                "byteLength": len(data),
+                "target": ARRAY_BUFFER if isFloat else ELEMENT_ARRAY_BUFFER,
             })
-            byte_offset += len(base64.b64decode(data))
-
-        bufferViews[bufferViews_index+4]["target"] = ELEMENT_ARRAY_BUFFER
+            byte_offset += len(data)
 
         # Bounding box
         position_min = [min(positions[i::3]) for i in range(3)]
@@ -158,7 +172,7 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
         })
 
         nodes.append({
-            "name": f"Node_{meshName}",
+            "name": f"{meshName}",
             "mesh": mesh_index,
             #"translation": [0,0,0]  # optional, can move each mesh
         })
@@ -168,9 +182,6 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
 
 
     # ---- end iteration
-
-    all_bytes = b"".join(base64.b64decode(b64) for b64 in buffers_data)
-
 
     # Build minimal glTF
     gltf = {
@@ -184,8 +195,8 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
     }
 
     gltf["buffers"].append({
-        "uri": "data:application/octet-stream;base64," + base64.b64encode(all_bytes).decode("ascii"),
-        "byteLength": len(all_bytes)
+        "uri": "data:application/octet-stream;base64," + base64.b64encode(raw_buffer).decode("ascii"),
+        "byteLength": len(raw_buffer)
     })
 
     # Save glTF
