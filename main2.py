@@ -1,4 +1,4 @@
-from main import convertXmlToGltf
+from convertXmlToGltf import convertXmlToGltf
 
 path = 'x:/Github/tribaltrouble/tt/geometry/'
 
