@@ -4,6 +4,7 @@ import struct
 import base64
 import math
 from pathlib import Path
+import numpy as np
 
 def parseMesh(filename):
     tree = ET.parse(filename)
@@ -48,8 +49,8 @@ def parseMesh(filename):
                 weight = float(skin.attrib["weight"])
 
             # Transform data
-            x, y, z = rotate(x, y, z) # rotate X -90 deg to align up
-            nx, ny, nz = rotate(nx, ny, nz)
+            #x, y, z = rotate(x, y, z) # rotate X -90 deg to align up
+            #nx, ny, nz = rotate(nx, ny, nz)
             nx, ny, nz = normalize(nx, ny, nz)
             v = 1.0 - v # flip uv
 
@@ -75,33 +76,69 @@ def parseMesh(filename):
 
     return positions, normals, colors, uvs, indices
 
+def topologicalSort(names, parents, matrices):
+    # Topological sort
+    topological_index = []
+
+    added = set()
+    def topoSort(i):
+        if i in added:
+            return
+        p = parents[i]
+        if p != -1:
+            topoSort(p)
+        topological_index.append(i)
+        added.add(i)
+
+    for i in range(len(names)):
+        topoSort(i)
+
+    old_to_new = {old: new for new, old in enumerate(topological_index)}
+
+    names_ord         = [names[i]    for i in topological_index]
+    #parents_ord       = [parents[i]  for i in topological_index]
+    matrices_ord      = [matrices[i] for i in topological_index]
+    parents_ord = [
+        -1 if parents[i] == -1 else old_to_new[parents[i]]
+        for i in topological_index
+    ]
+
+    return names_ord, parents_ord, matrices_ord
+
 def parseSkeleton(filename):
     tree = ET.parse(filename)
     root = tree.getroot()
 
-    bones_list = []
+    names = []
+    parentNames = [] # string
+    matrices = []
+
+    # Add root node
+    names.append("Bip01")
+    parentNames.append(None)
+    matrices.append([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]) # TODO: use None, gltF doesn't like identity
+
     for bone in root.find("bones").findall("bone"):
-        bones_list.append({
-            "name": bone.attrib["name"],
-            "parent_name": bone.attrib["parent"]
-        })
+        names.append(bone.attrib["name"])
+        parentNames.append(bone.attrib["parent"])
 
-    name_to_index = {b["name"]: i for i, b in enumerate(bones_list)}
-    names = [b["name"] for b in bones_list]
-    parents = [name_to_index.get(b["parent_name"], -1) for b in bones_list]
-
-    matrices = [None] * len(names)
     for t in root.find("init_pose").findall("transform"):
         name = t.attrib["name"]
+        assert(name == names[len(matrices)])
+
         matrix = [
             float(t.attrib["m00"]), float(t.attrib["m01"]), float(t.attrib["m02"]), float(t.attrib["m03"]),
             float(t.attrib["m10"]), float(t.attrib["m11"]), float(t.attrib["m12"]), float(t.attrib["m13"]),
             float(t.attrib["m20"]), float(t.attrib["m21"]), float(t.attrib["m22"]), float(t.attrib["m23"]),
             float(t.attrib["m30"]), float(t.attrib["m31"]), float(t.attrib["m32"]), float(t.attrib["m33"]),
         ]
-        matrices[name_to_index[name]] = matrix
+        matrices.append(matrix)
 
-    return names, parents, matrices, name_to_index
+    name_to_index = {name: i for i, name in enumerate(names)}
+    parents = [name_to_index.get(p, -1) for p in parentNames] # indices
+
+    names, parents, matrices = topologicalSort(names, parents, matrices)
+    return names, parents, matrices
 
 def parseAnimation(filename):
     tree = ET.parse(filename)
@@ -138,15 +175,24 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
     byte_offset = 0
 
     if skeleton_file:
-        bone_names, bone_parents, bone_transforms, bone_name_to_index = parseSkeleton(skeleton_file)
+        names, parents, matrices = parseSkeleton(skeleton_file)
 
         # create skeleton
-        nodesL = [{"name": name} for name in bone_names]
+        nodesL = [{"name": name} for name in names]
 
-        for i in range(len(bone_names)):
-            nodesL[i]["matrix"] = bone_transforms[i]
+        def inverseMult(A, B):
+            matA = np.array(A, dtype=np.float32).reshape(4,4)
+            matB = np.array(B, dtype=np.float32).reshape(4,4)
+            matA_inv = np.linalg.inv(matA)
+            #result = matA_inv @ matB
+            result = matB @ matA_inv # For some reason, this is what's needed
+            result_flat = result.reshape(-1).tolist()
+            return result_flat
 
-        for i, parent_index in enumerate(bone_parents):
+        for i in range(len(names)):
+            nodesL[i]["matrix"] = inverseMult(matrices[parents[i]], matrices[i]) if parents[i] != -1 else matrices[i]
+
+        for i, parent_index in enumerate(parents):
             if parent_index != -1:
                 if "children" not in nodesL[parent_index]:
                     nodesL[parent_index]["children"] = []
@@ -239,11 +285,14 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
             ]
         })
 
+        '''
         nodes.append({
             "name": f"{meshName}",
             "mesh": mesh_index,
             #"translation": [0,0,0]  # optional, can move each mesh
         })
+        '''
+        nodes[0]["mesh"] = mesh_index
 
         bufferViews_index += 5
         accessors_index += 5
@@ -259,14 +308,18 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
         "accessors": accessors,
         "meshes": meshes,
         "nodes": nodes,
-        "scenes": [{"nodes": list(range(len(nodes)))}],
-        #"scenes": [{"nodes": [0]}],
+        #"scenes": [{"nodes": list(range(len(nodes)))}],
+        "scenes": [{"nodes": [0]}],
     }
 
     gltf["buffers"].append({
         "uri": "data:application/octet-stream;base64," + base64.b64encode(raw_buffer).decode("ascii"),
         "byteLength": len(raw_buffer)
     })
+
+
+    #gltf = {k: v for k, v in data.items() if v is not None}
+
 
     # Save glTF
     with open(f"{name}.gltf", "w") as f:
