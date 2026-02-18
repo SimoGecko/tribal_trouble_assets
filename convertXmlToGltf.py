@@ -140,11 +140,9 @@ def parseSkeleton(filename):
     matrices = []
 
     # Add root node
-    '''
     names.append("Bip01")
     parentNames.append(None)
     matrices.append([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]) # TODO: use None, glTF doesn't like identity
-    '''
 
     for bone in root.find("bones").findall("bone"):
         names.append(bone.attrib["name"])
@@ -200,10 +198,12 @@ def inverseMult(A, B):
     result_flat = result.reshape(-1).tolist()
     return result_flat
 
+# TODO: ensure matrix is orthonormal
 def inv(A):
-    matA = np.array(A, dtype=np.float32).reshape(4,4)
-    matA_inv = np.linalg.inv(matA)
-    result_flat = matA_inv.reshape(-1).tolist()
+    mat = np.array(A, dtype=np.float32).reshape(4,4)
+    inv = np.linalg.inv(mat)
+    inv[np.abs(inv) < 1e-8] = 0.0 # remove noise
+    result_flat = inv.reshape(-1).tolist()
     return result_flat
 
 def decompose_matrix(mat4):
@@ -343,8 +343,8 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
             # collect TRS per frame
             translations, rotations, scales = [], [], []
             for matrices in frames:
-                mat = inverseMult(matrices[parents[i]], matrices[i]) if parents[i] != -1 else matrices[i]
-                #mat = matrices[i]
+                #mat = inverseMult(matrices[parents[i]], matrices[i]) if parents[i] != -1 else matrices[i]
+                mat = matrices[i]
 
                 t, r, s = decompose_matrix(mat)
                 translations.append(t)
@@ -403,13 +403,14 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
             node["translation"] = t
             node["rotation"] = r
             node["scale"] = s
+            # TODO: if s is ~[1,1,1], remove it. same if values are ~0
             del node["matrix"]
 
     # HARDCODED
     nodes[0]["mesh"] = 0
     nodes[0]["skin"] = 0
     #del nodes[0]["matrix"]
-    #nodes[0]["rotation"] = [-0.70710678, 0.0, 0.0, 0.70710678]
+    nodes[0]["rotation"] = [-0.70710678, 0.0, 0.0, 0.70710678]
 
     # ---- end iteration
 
