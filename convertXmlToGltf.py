@@ -1,10 +1,11 @@
-import xml.etree.ElementTree as ET
 import json
 import struct
 import base64
 import math
-from pathlib import Path
 import numpy as np
+import xml.etree.ElementTree as ET
+from scipy.spatial.transform import Rotation as R
+from pathlib import Path
 
 bone_to_index = None # needed by Mesh and Animation
 
@@ -139,9 +140,11 @@ def parseSkeleton(filename):
     matrices = []
 
     # Add root node
+    '''
     names.append("Bip01")
     parentNames.append(None)
     matrices.append([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]) # TODO: use None, glTF doesn't like identity
+    '''
 
     for bone in root.find("bones").findall("bone"):
         names.append(bone.attrib["name"])
@@ -175,7 +178,7 @@ def parseAnimation(filename):
         index = int(frame.attrib["index"])
         assert(index == len(frames))
 
-        frames[index] = [None] * len(bone_to_index)
+        frames.append([None] * len(bone_to_index))
         for t in frame.findall("transform"):
             name = t.attrib["name"]
             #assert(name == names[len(matrices)])
@@ -193,7 +196,7 @@ def inverseMult(A, B):
     matB = np.array(B, dtype=np.float32).reshape(4,4)
     matA_inv = np.linalg.inv(matA)
     #result = matA_inv @ matB
-    result = matB @ matA_inv # For some reason, this is what's needed
+    result = matB @ matA_inv # ATTENTION: For some reason, this is what's needed
     result_flat = result.reshape(-1).tolist()
     return result_flat
 
@@ -202,6 +205,25 @@ def inv(A):
     matA_inv = np.linalg.inv(matA)
     result_flat = matA_inv.reshape(-1).tolist()
     return result_flat
+
+def decompose_matrix(mat4):
+    m = np.array(mat4, dtype=np.float32).reshape(4,4).T # ATTENTION: transpose needed
+    t = m[:3, 3].tolist()
+    s = [np.linalg.norm(m[:3,0]),
+         np.linalg.norm(m[:3,1]),
+         np.linalg.norm(m[:3,2])]
+    r_mat = np.array([
+        m[:3,0]/s[0],
+        m[:3,1]/s[1],
+        m[:3,2]/s[2]
+    ]).T
+    r = R.from_matrix(r_mat).as_quat().tolist()
+    # convert to python arrays
+    t = [float(x) for x in t]
+    r = [float(x) for x in r]
+    s = [float(x) for x in s]
+    return t, r, s
+
 
 def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, animation_files=None):
     raw_buffer = b""
@@ -214,7 +236,7 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
     skins = []
     animations = []
 
-    def addAccessor(values, type, extra=None):
+    def addAccessor(values, type, semantic=None, extra=None):
         nonlocal raw_buffer
         nonlocal byte_offset
 
@@ -257,8 +279,9 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
             "buffer": 0,
             "byteOffset": byte_offset,
             "byteLength": len(data),
-            "target": ARRAY_BUFFER if not isIndices else ELEMENT_ARRAY_BUFFER,
         }
+        if semantic == None:
+            bufferView["target"] = ARRAY_BUFFER if not isIndices else ELEMENT_ARRAY_BUFFER
         byte_offset += len(data)
 
         accessor = {
@@ -298,14 +321,47 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
 
         skins.append({
             "joints": list(range(len(nodes))), # indices of nodes that act as bones
-            "inverseBindMatrices": addAccessor(matrices_flat, "MAT4f"), # accessor of 4x4 matrix
+            "inverseBindMatrices": addAccessor(matrices_flat, "MAT4f", "IBM"), # accessor of 4x4 matrix
             "skeleton": 0, # node of the hierarchy root
         })
 
     for animation_index, filename in enumerate(animation_files):
-        #frames = parseAnimation(filename, bone_to_index)
-        pass
+        frames = parseAnimation(filename)
 
+        time_step = 1/30  # assume 30fps
+        times = [i*time_step for i in range(len(frames))]  # time per frame
+
+        time_accessor = addAccessor(times, "SCALARf", "Time", {"min": [min(times)], "max": [max(times)]})
+        animName = Path(filename).stem
+        animation = {
+            "channels": [],
+            "samplers": [],
+            "name": animName,
+        }
+
+        for bone_index in range(len(nodes)):  # bones
+            # collect TRS per frame
+            translations, rotations, scales = [], [], []
+            for matrices in frames:
+                mat = inverseMult(matrices[parents[i]], matrices[i]) if parents[i] != -1 else matrices[i]
+                #mat = matrices[i]
+
+                t, r, s = decompose_matrix(mat)
+                translations.append(t)
+                rotations.append(r)
+                scales.append(s)
+            
+            # add accessors for times and values
+            trans_accessor = addAccessor([v for t in translations for v in t], "VEC3f", "Anim")
+            rot_accessor   = addAccessor([v for r in rotations for v in r], "VEC4f", "Anim")
+            scale_accessor = addAccessor([v for s in scales for v in s], "VEC3f", "Anim")
+            
+            for accessor, path in zip([trans_accessor, rot_accessor, scale_accessor], ["translation", "rotation", "scale"]):
+                sampler_idx = len(animation["samplers"])
+                animation["samplers"].append({"input": time_accessor, "output": accessor, "interpolation": "LINEAR"})
+                animation["channels"].append({"sampler": sampler_idx, "target": {"node": bone_index, "path": path}})
+
+        animations.append(animation)
 
     for mesh_index, filename in enumerate(mesh_files):
         positions, normals, colors, uvs, indices, joints, weights = parseMesh(filename)
@@ -320,7 +376,7 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
             "primitives": [
                 {
                     "attributes": {
-                        "POSITION":   addAccessor(positions, "VEC3f", {"min": position_min, "max": position_max}),
+                        "POSITION":   addAccessor(positions, "VEC3f", None, {"min": position_min, "max": position_max}),
                         "NORMAL":     addAccessor(normals, "VEC3f"),
                         "COLOR_0":    addAccessor(colors, "VEC4f"),
                         "TEXCOORD_0": addAccessor(uvs, "VEC2f"),
@@ -340,11 +396,20 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
         })
         '''
 
+    #switch nodes
+    for i, node in enumerate(nodes):
+        if "matrix" in node:
+            t, r, s = decompose_matrix(node["matrix"])
+            node["translation"] = t
+            node["rotation"] = r
+            node["scale"] = s
+            del node["matrix"]
+
     # HARDCODED
     nodes[0]["mesh"] = 0
     nodes[0]["skin"] = 0
-    del nodes[0]["matrix"]
-    nodes[0]["rotation"] = [-0.70710678, 0.0, 0.0, 0.70710678]
+    #del nodes[0]["matrix"]
+    #nodes[0]["rotation"] = [-0.70710678, 0.0, 0.0, 0.70710678]
 
     # ---- end iteration
 
@@ -360,6 +425,7 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
         "meshes": meshes,
         "nodes": nodes,
         "skins": skins,
+        "animations": animations,
         "scenes": [{"nodes": [0]}], # [{"nodes": list(range(len(nodes)))}],
     }
 
