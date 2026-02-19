@@ -51,9 +51,9 @@ def process_geometry(xml_path):
                 animation_files.append(animation_file)
 
             # ---- Call asset creation ----
-            asset_name = group_name + "_" + sprite_name
-            if asset_name != "natives_warrior":
-                continue
+            asset_name = group_name + "/" + sprite_name
+            #if asset_name != "vikings/peon":
+                #continue
             #print(asset_name, mesh_files, texture_files, skeleton_file, animation_files)
             print(f"Processing {asset_name}...")
             convertXmlToGltf(asset_name, mesh_files, texture_files, skeleton_file, animation_files)

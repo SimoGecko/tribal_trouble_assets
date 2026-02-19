@@ -14,6 +14,9 @@ bone_to_joint = None # needed by Mesh and Animation. boneName => jointIndex
 # 2. Transform data (normalize, rotate, clean, toposort, ...)
 # 3. Write to gltf
 
+def warn(msg):
+    print(f"\033[38;5;208mWARNING: {msg}\033[0m")
+
 def parseMesh(filename, isSkinned = False):
     tree = ET.parse(filename)
     root = tree.getroot()
@@ -51,6 +54,7 @@ def parseMesh(filename, isSkinned = False):
         js_out = [j for j,w in jw] + [0]*(4-len(jw))
         ws_out = [w for j,w in jw] + [0]*(4-len(jw))
         s = sum(ws_out)
+        assert(s > 0)
         if s: ws_out = [w/s for w in ws_out]
         else: js_out, ws_out = [js[0],0,0,0],[1,0,0,0]
         return js_out, ws_out
@@ -104,7 +108,7 @@ def parseMesh(filename, isSkinned = False):
         if len(poly_indices) == 3:
             indices.extend(poly_indices)
         elif len(poly_indices) > 3:
-            print('WARNING: not a triangle - triangulating')
+            warn('not a triangle - triangulating')
             # Triangulate simple convex polygon (fan method)
             for i in range(1, len(poly_indices)-1):
                 indices.extend([poly_indices[0], poly_indices[i], poly_indices[i+1]])
@@ -152,6 +156,10 @@ def parseSkeleton(filename):
         names.append(bone.attrib["name"])
         parentNames.append(bone.attrib["parent"])
 
+    roots = list(set(parentNames) - set(names))
+    if len(roots) != 1:
+        warn(f"expected 1 root bone, found {len(roots)}: {roots}")
+
     for t in root.find("init_pose").findall("transform"):
         name = t.attrib["name"]
         assert(name == names[len(matrices)])
@@ -169,7 +177,7 @@ def parseSkeleton(filename):
 
     names, parents, matrices = topologicalSort(names, parents, matrices)
     # TODO: return root name (if any)
-    return names, parents, matrices
+    return names, parents, matrices, roots[0]
 
 def parseAnimation(filename):
     tree = ET.parse(filename)
@@ -213,15 +221,24 @@ def invT(A):
 def decompose_matrix(mat4):
     m = np.array(mat4, dtype=np.float32).reshape(4,4)
     t = m[:3, 3].tolist()
-    s = [np.linalg.norm(m[:3,0]),
-         np.linalg.norm(m[:3,1]),
-         np.linalg.norm(m[:3,2])]
-    r_mat = np.array([
-        m[:3,0]/s[0],
-        m[:3,1]/s[1],
-        m[:3,2]/s[2]
-    ]).T
-    r = R.from_matrix(r_mat).as_quat().tolist()
+
+    # Extract 3x3 linear part
+    M = m[:3, :3].astype(np.float64)
+
+    # Use SVD to robustly separate rotation and scale (polar decomposition)
+    U, Svals, Vt = np.linalg.svd(M)
+    R_mat = (U @ Vt)
+    # Ensure a proper rotation (determinant 1)
+    if np.linalg.det(R_mat) < 0:
+        U[:, -1] *= -1
+        R_mat = U @ Vt
+
+    # Svals are the singular values ~ scale along principal axes
+    s = [float(Svals[0]), float(Svals[1]), float(Svals[2])]
+
+    # Convert rotation matrix to quaternion
+    r = R.from_matrix(R_mat).as_quat().tolist()
+
     # convert to python arrays
     t = [float(x) for x in t]
     r = [float(x) for x in r]
@@ -247,7 +264,6 @@ def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=No
         "rotation": [-0.70710678, 0.0, 0.0, 0.70710678],
         "children": [],
     })
-    kNodeOffset = 1 # +1 since we already have a node
 
     def addAccessor(values, type, semantic=None, extra=None):
         nonlocal raw_buffer
@@ -312,7 +328,7 @@ def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=No
         return accessorIndex
 
     if skeleton_file:
-        names, parents, matrices = parseSkeleton(skeleton_file)
+        names, parents, matrices, rootName = parseSkeleton(skeleton_file)
 
         global bone_to_joint
         bone_to_joint = {}
@@ -333,25 +349,27 @@ def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=No
                 if "children" not in parNode:
                     parNode["children"] = []
                 parNode["children"].append(joints[i])
+            else:
+                nodes[0]["children"].append(joints[i]) # root node is parent of root bone
 
         matrices_flat = [f for mat in matrices for f in invT(mat)] # invT is probably just ortho-normalizing
 
         skins.append({
             "joints": joints, # indices of nodes that act as bones
             "inverseBindMatrices": addAccessor(matrices_flat, "MAT4f", "IBM"), # accessor of 4x4 matrix
-            "skeleton": joints[0], # node of the hierarchy root
+            "skeleton": 0, #joints[0], # node of the hierarchy root
         })
         
         # HARDCODED
         nodes[0]["mesh"] = 0
         nodes[0]["skin"] = 0
-        nodes[0]["children"].append(1)
+        nodes[0]["name"] = rootName
 
     for animation_index, filename in enumerate(animation_files):
         frames = parseAnimation(filename)
 
-        time_step = 1/30  # assume 30fps
-        times = [i*time_step for i in range(len(frames))]  # time per frame
+        time_step = 1/30  # 30fps
+        times = [i*time_step for i in range(len(frames))]
 
         time_accessor = addAccessor(times, "SCALARf", "Time", {"min": [min(times)], "max": [max(times)]})
         animName = Path(filename).stem
@@ -382,7 +400,7 @@ def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=No
             for accessor, path in zip([trans_accessor, rot_accessor, scale_accessor], ["translation", "rotation", "scale"]):
                 sampler_idx = len(animation["samplers"])
                 animation["samplers"].append({"input": time_accessor, "output": accessor, "interpolation": "LINEAR"})
-                animation["channels"].append({"sampler": sampler_idx, "target": {"node": bone_index+kNodeOffset, "path": path}})
+                animation["channels"].append({"sampler": sampler_idx, "target": {"node": joints[bone_index], "path": path}})
 
         animations.append(animation)
 
@@ -423,6 +441,7 @@ def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=No
                 "mesh": mesh_index,
                 #"translation": [0,0,0]  # optional, can move each mesh
             })
+            nodes[0]["children"].append(len(nodes)-1)
             
 
     #switch nodes

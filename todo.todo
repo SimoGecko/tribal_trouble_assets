@@ -1,0 +1,26 @@
+TODO:
+  ✔ fix errors @high
+  ☐ fix warnings in GLTF
+  ☐ merge some files into single file (plants, treasures, building) @high
+  ☐ include texture
+  ✔ (save as output folders) @ low
+  ✔ some skeletons do not work (vikings_warrior) @high
+  ☐ resources should not contain skeleton/animations (should merge into peon) @high
+  ✔ some bad skinning (chicken, vikings_peon) @high
+
+FILES_WITH_ERRORS:
+  ✔ natives_chieftain
+
+GLTF ERRORS:
+
+ERRORS:
+SKIN_SKELETON_INVALID  Skeleton node is not a common root.  /skins/0/skeleton
+NODE_SKIN_NO_SCENE  A node with a skinned mesh is used in a scene that does not contain joint nodes.  /nodes/0
+ ✔ ACCESSOR_INVALID_FLOAT  Accessor element at index 0 is NaN.  /accessors/123
+
+WARNINGS:
+NODE_SKINNED_MESH_LOCAL_TRANSFORMS  Local transforms will not affect a skinned mesh.  /nodes/0
+
+INFO:
+UNUSED_OBJECT  This object may be unused.  /meshes/1/primitives/0/attributes/TEXCOORD_0
+UNUSED_OBJECT  This object may be unused.  /meshes/1
