@@ -14,7 +14,7 @@ bone_to_index = None # needed by Mesh and Animation
 # 2. Transform data (normalize, rotate, clean, toposort, ...)
 # 3. Write to gltf
 
-def parseMesh(filename):
+def parseMesh(filename, isSkinned = False):
     tree = ET.parse(filename)
     root = tree.getroot()
 
@@ -67,15 +67,16 @@ def parseMesh(filename):
             
             js = []
             ws = []
-            for skin in vertex.findall("skin"):
-                boneName = skin.attrib["bone"]
-                weight = float(skin.attrib["weight"])
-                assert(weight >= 0 and weight <= 1)
-                assert(boneName in bone_to_index)
-                js.append(bone_to_index[boneName])
-                ws.append(weight)
+            if isSkinned:
+                for skin in vertex.findall("skin"):
+                    boneName = skin.attrib["bone"]
+                    weight = float(skin.attrib["weight"])
+                    assert(weight >= 0 and weight <= 1)
+                    assert(boneName in bone_to_index)
+                    js.append(bone_to_index[boneName])
+                    ws.append(weight)
 
-            js, ws = cleanJointsAndWeights(js, ws)
+                js, ws = cleanJointsAndWeights(js, ws)
 
             # Transform data
             #x, y, z = rotate(x, y, z) # rotate X -90 deg to align up
@@ -83,7 +84,10 @@ def parseMesh(filename):
             nx, ny, nz = normalize(nx, ny, nz)
             v = 1.0 - v # flip uv
 
-            key = (x, y, z, nx, ny, nz, r, g, b, a, u, v, js[0], js[1], js[2], js[3], ws[0], ws[1], ws[2], ws[3])
+
+            key = (x, y, z, nx, ny, nz, r, g, b, a, u, v)
+            if isSkinned:
+                key = key + (js[0], js[1], js[2], js[3], ws[0], ws[1], ws[2], ws[3])
             if key not in vertex_map:
                 vertex_map[key] = current_index
                 current_index += 1
@@ -370,37 +374,43 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
         animations.append(animation)
 
     for mesh_index, filename in enumerate(mesh_files):
-        positions, normals, colors, uvs, indices, joints, weights = parseMesh(filename)
+        isSkinned = skeleton_file is not None
+        positions, normals, colors, uvs, indices, joints, weights = parseMesh(filename, isSkinned)
 
         # Bounding box
         position_min = [min(positions[i::3]) for i in range(3)]
         position_max = [max(positions[i::3]) for i in range(3)]
+
+        attributes = {
+            "POSITION":   addAccessor(positions, "VEC3f", None, {"min": position_min, "max": position_max}),
+            "NORMAL":     addAccessor(normals, "VEC3f"),
+            "COLOR_0":    addAccessor(colors, "VEC4f"),
+            "TEXCOORD_0": addAccessor(uvs, "VEC2f"),
+        }
+        if isSkinned:
+            attributes.update({
+                "JOINTS_0":   addAccessor(joints, "VEC4u"),
+                "WEIGHTS_0":  addAccessor(weights, "VEC4f"),
+            })
 
         meshName = Path(filename).stem
         meshes.append({
             "name": f"Mesh_{meshName}",
             "primitives": [
                 {
-                    "attributes": {
-                        "POSITION":   addAccessor(positions, "VEC3f", None, {"min": position_min, "max": position_max}),
-                        "NORMAL":     addAccessor(normals, "VEC3f"),
-                        "COLOR_0":    addAccessor(colors, "VEC4f"),
-                        "TEXCOORD_0": addAccessor(uvs, "VEC2f"),
-                        "JOINTS_0":   addAccessor(joints, "VEC4u"),
-                        "WEIGHTS_0":  addAccessor(weights, "VEC4f"),
-                    },
+                    "attributes": attributes,
                     "indices": addAccessor(indices, "SCALARu"),
                 }
             ]
         })
 
-        '''
-        nodes.append({
-            "name": f"{meshName}",
-            "mesh": mesh_index,
-            #"translation": [0,0,0]  # optional, can move each mesh
-        })
-        '''
+        if not isSkinned:
+            nodes.append({
+                "name": f"{meshName}",
+                "mesh": mesh_index,
+                #"translation": [0,0,0]  # optional, can move each mesh
+            })
+            
 
     #switch nodes
     for i, node in enumerate(nodes):
@@ -414,7 +424,8 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
 
     # HARDCODED
     nodes[0]["mesh"] = 0
-    nodes[0]["skin"] = 0
+    if isSkinned:
+        nodes[0]["skin"] = 0
     #del nodes[0]["matrix"]
     nodes[0]["rotation"] = [-0.70710678, 0.0, 0.0, 0.70710678]
 
