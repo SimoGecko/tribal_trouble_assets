@@ -148,11 +148,6 @@ def parseSkeleton(filename):
     parentNames = [] # string
     matrices = []
 
-    # Add root node
-    names.append("Bip01")
-    parentNames.append(None)
-    matrices.append([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]) # TODO: use None, glTF doesn't like identity
-    
     for bone in root.find("bones").findall("bone"):
         names.append(bone.attrib["name"])
         parentNames.append(bone.attrib["parent"])
@@ -173,6 +168,7 @@ def parseSkeleton(filename):
     parents = [name_to_index.get(p, -1) for p in parentNames] # indices
 
     names, parents, matrices = topologicalSort(names, parents, matrices)
+    # TODO: return root name (if any)
     return names, parents, matrices
 
 def parseAnimation(filename):
@@ -233,7 +229,7 @@ def decompose_matrix(mat4):
     return t, r, s
 
 
-def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, animation_files=None):
+def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=None, animation_files=None):
     raw_buffer = b""
     byte_offset = 0
 
@@ -243,6 +239,15 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
     nodes = []
     skins = []
     animations = []
+
+
+    # HARDCODED root
+    nodes.append({
+        "name": "Root",
+        "rotation": [-0.70710678, 0.0, 0.0, 0.70710678],
+        "children": [],
+    })
+    kNodeOffset = 1 # +1 since we already have a node
 
     def addAccessor(values, type, semantic=None, extra=None):
         nonlocal raw_buffer
@@ -306,31 +311,30 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
         accessors.append(accessor)
         return accessorIndex
 
-
     if skeleton_file:
         names, parents, matrices = parseSkeleton(skeleton_file)
+
         global bone_to_index
-        bone_to_index = {name: i for i, name in enumerate(names)}
+        bone_to_index = {}
+        for i, name in enumerate(names):
+            bone_to_index[name] = i#len(nodes)
+            matLocal = inverseMult(matrices[parents[i]], matrices[i]) if parents[i] != -1 else matrices[i]
+            nodes.append({
+                "name": name,
+                "matrix": matLocal,
+            })
+            if parents[i] != -1:
+                parIdx = parents[i]+kNodeOffset
+                if "children" not in nodes[parIdx]:
+                    nodes[parIdx]["children"] = []
+                nodes[parIdx]["children"].append(i+kNodeOffset)
 
-        # create skeleton
-        nodesL = [{"name": name} for name in names]
-
-        for i in range(len(names)):
-            nodesL[i]["matrix"] = inverseMult(matrices[parents[i]], matrices[i]) if parents[i] != -1 else matrices[i]
-
-        for i, parent_index in enumerate(parents):
-            if parent_index != -1:
-                if "children" not in nodesL[parent_index]:
-                    nodesL[parent_index]["children"] = []
-                nodesL[parent_index]["children"].append(i)
-
-        nodes.extend(nodesL)
         matrices_flat = [f for mat in matrices for f in invT(mat)]
 
         skins.append({
-            "joints": list(range(len(nodes))), # indices of nodes that act as bones
+            "joints": list(range(1, len(nodes))), # indices of nodes that act as bones
             "inverseBindMatrices": addAccessor(matrices_flat, "MAT4f", "IBM"), # accessor of 4x4 matrix
-            "skeleton": 0, # node of the hierarchy root
+            "skeleton": 1, # node of the hierarchy root
         })
 
     for animation_index, filename in enumerate(animation_files):
@@ -369,7 +373,7 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
             for accessor, path in zip([trans_accessor, rot_accessor, scale_accessor], ["translation", "rotation", "scale"]):
                 sampler_idx = len(animation["samplers"])
                 animation["samplers"].append({"input": time_accessor, "output": accessor, "interpolation": "LINEAR"})
-                animation["channels"].append({"sampler": sampler_idx, "target": {"node": bone_index, "path": path}})
+                animation["channels"].append({"sampler": sampler_idx, "target": {"node": bone_index+kNodeOffset, "path": path}})
 
         animations.append(animation)
 
@@ -422,13 +426,6 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
             # TODO: if s is ~[1,1,1], remove it. same if values are ~0
             del node["matrix"]
 
-    # HARDCODED
-    nodes[0]["mesh"] = 0
-    if isSkinned:
-        nodes[0]["skin"] = 0
-    #del nodes[0]["matrix"]
-    nodes[0]["rotation"] = [-0.70710678, 0.0, 0.0, 0.70710678]
-
     # ---- end iteration
 
     # Build minimal glTF
@@ -455,7 +452,7 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
     #gltf = {k: v for k, v in data.items() if v is not None}
 
     # Save glTF
-    output_file = Path(f"output/{name}.gltf")
+    output_file = Path(f"output/{main_name}.gltf")
     output_file.parent.mkdir(parents=True, exist_ok=True)
 
     with output_file.open("w") as f:
