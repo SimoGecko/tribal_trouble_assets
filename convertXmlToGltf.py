@@ -343,7 +343,6 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
             "name": animName,
         }
 
-        print(bone_to_index)
         for bone_index in range(1, len(nodes)):  # bones
             # collect TRS per frame
             translations, rotations, scales = [], [], []
@@ -440,7 +439,7 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
     #gltf = {k: v for k, v in data.items() if v is not None}
 
     # Save glTF
-    with open(f"{name}.gltf", "w") as f:
+    with open(f"output/{name}.gltf", "w") as f:
         json.dump(gltf, f, indent=2)
 
     print("Conversion done!")

@@ -1,95 +1,60 @@
 from convertXmlToGltf import convertXmlToGltf
+import xml.etree.ElementTree as ET
 
-geo = 'x:/Github/tribaltrouble/tt/geometry/'
-tex = 'x:/Github/tribaltrouble/tt/textures/'
+root = 'x:/Github/tribaltrouble/tt/'
 
-mesh_files = [
-	geo + "natives/tower/native_tower_built_hi.xml",
-	geo + "natives/tower/native_tower_built_lo.xml",
-	geo + "natives/tower/native_tower_build_hi.xml",
-	geo + "natives/tower/native_tower_build_lo.xml",
-	geo + "natives/tower/native_tower_start_hi.xml",
-	geo + "natives/tower/native_tower_start_lo.xml"
-]
+def clean(text):
+    return text.strip() if text else ""
 
-texture_files = [
-    tex + "models/native_tower.png",
-    tex + "teamdecals/native_tower_team.png", # NOTES: they have prefix path (should be implicit)
-]
+def process_geometry(xml_path):
+    tree = ET.parse(xml_path)
+    rootElem = tree.getroot()
 
-mesh_files = [
-    geo + "natives/warrior/native_warrior_mesh.xml",
-    #geo + "natives/warrior/native_warrior_low_poly_mesh.xml",
-]
+    for group in rootElem.findall("group"):
+        group_name = group.attrib["name"]
 
-texture_files = [
-    tex + "models/native_warrior_rock.png",
-    tex + "teamdecals/native_warrior_rock_team.png",
-]
+        for sprite in group.findall("sprite"):
+            mesh_files = []
+            texture_files = []
+            # TODO: texture_teams
+            skeleton_file = None
+            animation_files = []
+            
+            sprite_name = sprite.attrib["name"]
 
-skeleton_file = geo + "natives/warrior/native_warrior_skeleton.xml"
-animation_files = [
-    #geo + "natives/warrior/native_warrior_idle.xml",
-    geo + "natives/warrior/native_warrior_run.xml",
-    #geo + "natives/warrior/native_warrior_attack.xml",
-    #geo + "natives/warrior/native_warrior_die.xml",
-]
+            # ---- Skeleton ----
+            skeleton_elem = sprite.find("skeleton")
+            if skeleton_elem is not None:
+                skeleton_file = root + "geometry/" + skeleton_elem.text
 
-'''
-<sprite name="warrior">
-    <skeleton>natives/warrior/native_warrior_skeleton.xml</skeleton>
-    <model r="90" g="60" b="30">
-        natives/warrior/native_warrior_mesh.xml
-        <texture name="native_warrior_rock" team="native_warrior_rock_team"/>
-        <texture name="native_warrior_iron" team="native_warrior_iron_team"/>
-        <texture name="native_warrior_rubber" team="native_warrior_rubber_team"/>
-    </model>
-    <model r="90" g="60" b="30">
-        natives/warrior/native_warrior_low_poly_mesh.xml
-        <texture name="native_warrior_rock" team="native_warrior_rock_team"/>
-        <texture name="native_warrior_iron" team="native_warrior_iron_team"/>
-        <texture name="native_warrior_rubber" team="native_warrior_rubber_team"/>
-    </model>
-    <animation wpc="1" type="loop">natives/warrior/native_warrior_idle.xml</animation>
-    <animation wpc="3.2" type="loop">natives/warrior/native_warrior_run.xml</animation>
-    <animation wpc="1" type="plain">natives/warrior/native_warrior_attack.xml</animation>
-    <animation wpc="1" type="plain">natives/warrior/native_warrior_die.xml</animation>
-</sprite>
-'''
+            # ---- Models ----
+            for model in sprite.findall("model"):
+                mesh_file = root + "geometry/" + clean(model.text)
+                mesh_files.append(mesh_file)
 
+                # Unclear what these are for. Maybe team-color/tint mask?
+                r, g, b,  = float(model.attrib["r"]), float(model.attrib["g"]), float(model.attrib["b"])
 
-'''
-<sprite name="tower">
-    <model r="90" g="60" b="30">
-        natives/tower/native_tower_built_hi.xml
-        <texture name="native_tower" team="native_tower_team"/>
-    </model>
-    <model r="90" g="60" b="30">
-        natives/tower/native_tower_built_lo.xml
-        <texture name="native_tower" team="native_tower_team"/>
-    </model>
-</sprite>
-<sprite name="tower_halfbuilt">
-    <model r="90" g="60" b="30">
-        natives/tower/native_tower_build_hi.xml
-        <texture name="native_tower" team="native_tower_team"/>
-    </model>
-    <model r="90" g="60" b="30">
-        natives/tower/native_tower_build_lo.xml
-        <texture name="native_tower" team="native_tower_team"/>
-    </model>
-</sprite>
-<sprite name="tower_start">
-    <model r="90" g="60" b="30">
-        natives/tower/native_tower_start_hi.xml
-        <texture name="native_tower" team="native_tower_team"/>
-    </model>
-    <model r="90" g="60" b="30">
-        natives/tower/native_tower_start_lo.xml
-        <texture name="native_tower" team="native_tower_team"/>
-    </model>
-</sprite>
-'''
+                # NOTES: this might be dupe since we have multiple models
+                for texture in model.findall("texture"):
+                    texture_file = root + "texture/models/" + clean(texture.attrib["name"]) + ".png"
+                    team_file    = root + "texture/teamdecals/" + clean(texture.get("team", "")) + ".png"
+                    texture_files.append(texture_file)
 
-#convertXmlToGltf("tower", mesh_files, texture_files)
-convertXmlToGltf("warrior", mesh_files, texture_files, skeleton_file, animation_files)
+            # ---- Animations ----
+            for anim in sprite.findall("animation"):
+                wpc = float(anim.get("wpc", 0)) # ?? maybe Walk per cycle? / World units per cycle
+                type = anim.get("type", "") # loop or plain
+                assert(type == "loop" or type == "plain")
+                animation_file = root + "geometry/" + clean(anim.text)
+                animation_files.append(animation_file)
+
+            # ---- Call asset creation ----
+            asset_name = group_name + "_" + sprite_name
+            if asset_name == "vikings_axe":
+                continue
+            #print(asset_name, mesh_files, texture_files, skeleton_file, animation_files)
+            print(f"Processing {asset_name}...")
+            convertXmlToGltf(asset_name, mesh_files, texture_files, skeleton_file, animation_files)
+
+process_geometry(root + "geometry/geometry.xml")
