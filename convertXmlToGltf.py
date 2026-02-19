@@ -9,6 +9,11 @@ from pathlib import Path
 
 bone_to_index = None # needed by Mesh and Animation
 
+# TODO: Organize script
+# 1. Parse raw data
+# 2. Transform data (normalize, rotate, clean, toposort, ...)
+# 3. Write to gltf
+
 def parseMesh(filename):
     tree = ET.parse(filename)
     root = tree.getroot()
@@ -152,11 +157,11 @@ def parseSkeleton(filename):
         name = t.attrib["name"]
         assert(name == names[len(matrices)])
 
-        matrix = [
-            float(t.attrib["m00"]), float(t.attrib["m01"]), float(t.attrib["m02"]), float(t.attrib["m03"]),
-            float(t.attrib["m10"]), float(t.attrib["m11"]), float(t.attrib["m12"]), float(t.attrib["m13"]),
-            float(t.attrib["m20"]), float(t.attrib["m21"]), float(t.attrib["m22"]), float(t.attrib["m23"]),
-            float(t.attrib["m30"]), float(t.attrib["m31"]), float(t.attrib["m32"]), float(t.attrib["m33"]),
+        matrix = [ # ATTENTION: we're reading them transposed since that's how they are in the data
+            float(t.attrib["m00"]), float(t.attrib["m10"]), float(t.attrib["m20"]), float(t.attrib["m30"]),
+            float(t.attrib["m01"]), float(t.attrib["m11"]), float(t.attrib["m21"]), float(t.attrib["m31"]),
+            float(t.attrib["m02"]), float(t.attrib["m12"]), float(t.attrib["m22"]), float(t.attrib["m32"]),
+            float(t.attrib["m03"]), float(t.attrib["m13"]), float(t.attrib["m23"]), float(t.attrib["m33"]),
         ]
         matrices.append(matrix)
 
@@ -180,11 +185,11 @@ def parseAnimation(filename):
         for t in frame.findall("transform"):
             name = t.attrib["name"]
             #assert(name == names[len(matrices)])
-            matrix = [
-                float(t.attrib["m00"]), float(t.attrib["m01"]), float(t.attrib["m02"]), float(t.attrib["m03"]),
-                float(t.attrib["m10"]), float(t.attrib["m11"]), float(t.attrib["m12"]), float(t.attrib["m13"]),
-                float(t.attrib["m20"]), float(t.attrib["m21"]), float(t.attrib["m22"]), float(t.attrib["m23"]),
-                float(t.attrib["m30"]), float(t.attrib["m31"]), float(t.attrib["m32"]), float(t.attrib["m33"]),
+            matrix = [ # ATTENTION: we're reading them transposed since that's how they are in the data
+                float(t.attrib["m00"]), float(t.attrib["m10"]), float(t.attrib["m20"]), float(t.attrib["m30"]),
+                float(t.attrib["m01"]), float(t.attrib["m11"]), float(t.attrib["m21"]), float(t.attrib["m31"]),
+                float(t.attrib["m02"]), float(t.attrib["m12"]), float(t.attrib["m22"]), float(t.attrib["m32"]),
+                float(t.attrib["m03"]), float(t.attrib["m13"]), float(t.attrib["m23"]), float(t.attrib["m33"]),
             ]
             frames[index][bone_to_index[name]] = matrix
     return frames
@@ -193,21 +198,20 @@ def inverseMult(A, B):
     matA = np.array(A, dtype=np.float32).reshape(4,4)
     matB = np.array(B, dtype=np.float32).reshape(4,4)
     matA_inv = np.linalg.inv(matA)
-    #result = matA_inv @ matB
-    result = matB @ matA_inv # ATTENTION: For some reason, this is what's needed
+    result = matA_inv @ matB
     result_flat = result.reshape(-1).tolist()
     return result_flat
 
 # TODO: ensure matrix is orthonormal
-def inv(A):
-    mat = np.array(A, dtype=np.float32).reshape(4,4)
+def invT(A):
+    mat = np.array(A, dtype=np.float32).reshape(4,4).T # ATTENTION: transpose needed
     inv = np.linalg.inv(mat)
     inv[np.abs(inv) < 1e-8] = 0.0 # remove noise
     result_flat = inv.reshape(-1).tolist()
     return result_flat
 
 def decompose_matrix(mat4):
-    m = np.array(mat4, dtype=np.float32).reshape(4,4).T # ATTENTION: transpose needed
+    m = np.array(mat4, dtype=np.float32).reshape(4,4)
     t = m[:3, 3].tolist()
     s = [np.linalg.norm(m[:3,0]),
          np.linalg.norm(m[:3,1]),
@@ -317,7 +321,7 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
                 nodesL[parent_index]["children"].append(i)
 
         nodes.extend(nodesL)
-        matrices_flat = [f for mat in matrices for f in inv(mat)]
+        matrices_flat = [f for mat in matrices for f in invT(mat)]
 
         skins.append({
             "joints": list(range(len(nodes))), # indices of nodes that act as bones
@@ -343,8 +347,8 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
             # collect TRS per frame
             translations, rotations, scales = [], [], []
             for matrices in frames:
-                #mat = inverseMult(matrices[parents[i]], matrices[i]) if parents[i] != -1 else matrices[i]
-                mat = matrices[i]
+                mat = inverseMult(matrices[parents[i]], matrices[i]) if parents[i] != -1 else matrices[i]
+                #mat = matrices[i]
 
                 t, r, s = decompose_matrix(mat)
                 translations.append(t)
