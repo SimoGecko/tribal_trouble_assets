@@ -148,7 +148,7 @@ def parseSkeleton(filename):
     names.append("Bip01")
     parentNames.append(None)
     matrices.append([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]) # TODO: use None, glTF doesn't like identity
-
+    
     for bone in root.find("bones").findall("bone"):
         names.append(bone.attrib["name"])
         parentNames.append(bone.attrib["parent"])
@@ -343,10 +343,13 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
             "name": animName,
         }
 
-        for bone_index in range(len(nodes)):  # bones
+        print(bone_to_index)
+        for bone_index in range(1, len(nodes)):  # bones
             # collect TRS per frame
             translations, rotations, scales = [], [], []
+            i = bone_index
             for matrices in frames:
+                matrices[0] = [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]
                 mat = inverseMult(matrices[parents[i]], matrices[i]) if parents[i] != -1 else matrices[i]
                 #mat = matrices[i]
 
