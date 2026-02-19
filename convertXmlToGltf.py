@@ -7,7 +7,7 @@ import xml.etree.ElementTree as ET
 from scipy.spatial.transform import Rotation as R
 from pathlib import Path
 
-bone_to_index = None # needed by Mesh and Animation
+bone_to_joint = None # needed by Mesh and Animation. boneName => jointIndex
 
 # TODO: Organize script
 # 1. Parse raw data
@@ -72,8 +72,8 @@ def parseMesh(filename, isSkinned = False):
                     boneName = skin.attrib["bone"]
                     weight = float(skin.attrib["weight"])
                     assert(weight >= 0 and weight <= 1)
-                    assert(boneName in bone_to_index)
-                    js.append(bone_to_index[boneName])
+                    assert(boneName in bone_to_joint)
+                    js.append(bone_to_joint[boneName])
                     ws.append(weight)
 
                 js, ws = cleanJointsAndWeights(js, ws)
@@ -181,7 +181,7 @@ def parseAnimation(filename):
         index = int(frame.attrib["index"])
         assert(index == len(frames))
 
-        frames.append([None] * len(bone_to_index))
+        frames.append([None] * len(bone_to_joint))
         for t in frame.findall("transform"):
             name = t.attrib["name"]
             #assert(name == names[len(matrices)])
@@ -191,7 +191,7 @@ def parseAnimation(filename):
                 float(t.attrib["m02"]), float(t.attrib["m12"]), float(t.attrib["m22"]), float(t.attrib["m32"]),
                 float(t.attrib["m03"]), float(t.attrib["m13"]), float(t.attrib["m23"]), float(t.attrib["m33"]),
             ]
-            frames[index][bone_to_index[name]] = matrix
+            frames[index][bone_to_joint[name]] = matrix
     return frames
 
 def inverseMult(A, B):
@@ -241,7 +241,7 @@ def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=No
     animations = []
 
 
-    # HARDCODED root
+    # root
     nodes.append({
         "name": "Root",
         "rotation": [-0.70710678, 0.0, 0.0, 0.70710678],
@@ -314,28 +314,38 @@ def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=No
     if skeleton_file:
         names, parents, matrices = parseSkeleton(skeleton_file)
 
-        global bone_to_index
-        bone_to_index = {}
+        global bone_to_joint
+        bone_to_joint = {}
+        #bone_to_joint = {name: i for i, name in enumerate(names)}
+        joints = []
         for i, name in enumerate(names):
-            bone_to_index[name] = i#len(nodes)
+            bone_to_joint[name] = i
+            joints.append(len(nodes)) # joint to node index
+            
             matLocal = inverseMult(matrices[parents[i]], matrices[i]) if parents[i] != -1 else matrices[i]
             nodes.append({
                 "name": name,
                 "matrix": matLocal,
             })
             if parents[i] != -1:
-                parIdx = parents[i]+kNodeOffset
-                if "children" not in nodes[parIdx]:
-                    nodes[parIdx]["children"] = []
-                nodes[parIdx]["children"].append(i+kNodeOffset)
+                parNodeIdx = joints[parents[i]]
+                parNode = nodes[parNodeIdx]
+                if "children" not in parNode:
+                    parNode["children"] = []
+                parNode["children"].append(joints[i])
 
-        matrices_flat = [f for mat in matrices for f in invT(mat)]
+        matrices_flat = [f for mat in matrices for f in invT(mat)] # invT is probably just ortho-normalizing
 
         skins.append({
-            "joints": list(range(1, len(nodes))), # indices of nodes that act as bones
+            "joints": joints, # indices of nodes that act as bones
             "inverseBindMatrices": addAccessor(matrices_flat, "MAT4f", "IBM"), # accessor of 4x4 matrix
-            "skeleton": 1, # node of the hierarchy root
+            "skeleton": joints[0], # node of the hierarchy root
         })
+        
+        # HARDCODED
+        nodes[0]["mesh"] = 0
+        nodes[0]["skin"] = 0
+        nodes[0]["children"].append(1)
 
     for animation_index, filename in enumerate(animation_files):
         frames = parseAnimation(filename)
@@ -351,12 +361,11 @@ def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=No
             "name": animName,
         }
 
-        for bone_index in range(1, len(nodes)):  # bones
+        for bone_index in range(len(bone_to_joint)):  # bones
             # collect TRS per frame
             translations, rotations, scales = [], [], []
             i = bone_index
             for matrices in frames:
-                matrices[0] = [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]
                 mat = inverseMult(matrices[parents[i]], matrices[i]) if parents[i] != -1 else matrices[i]
                 #mat = matrices[i]
 
