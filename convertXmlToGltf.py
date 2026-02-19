@@ -446,11 +446,19 @@ def convertXmlToGltf(name, mesh_files, texture_files=None, skeleton_file=None, a
         "animations": animations,
         "scenes": [{"nodes": [0]}], # [{"nodes": list(range(len(nodes)))}],
     }
+    
+    if skins == []:
+        del gltf["skins"]
+    if animations == []:
+        del gltf["animations"]
 
     #gltf = {k: v for k, v in data.items() if v is not None}
 
     # Save glTF
-    with open(f"output/{name}.gltf", "w") as f:
+    output_file = Path(f"output/{name}.gltf")
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+
+    with output_file.open("w") as f:
         json.dump(gltf, f, indent=2)
 
-    print("Conversion done!")
+    #print("Conversion done!")

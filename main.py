@@ -21,6 +21,7 @@ def process_geometry(xml_path):
             animation_files = []
             
             sprite_name = sprite.attrib["name"]
+            sprite_scale = float(sprite.get("scale", 1.0)) # TODO: use
 
             # ---- Skeleton ----
             skeleton_elem = sprite.find("skeleton")
@@ -51,8 +52,8 @@ def process_geometry(xml_path):
 
             # ---- Call asset creation ----
             asset_name = group_name + "_" + sprite_name
-            #if asset_name != "vikings_tower":
-                #continue
+            if asset_name != "natives_warrior":
+                continue
             #print(asset_name, mesh_files, texture_files, skeleton_file, animation_files)
             print(f"Processing {asset_name}...")
             convertXmlToGltf(asset_name, mesh_files, texture_files, skeleton_file, animation_files)
