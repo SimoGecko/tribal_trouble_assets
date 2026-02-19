@@ -176,7 +176,6 @@ def parseSkeleton(filename):
     parents = [name_to_index.get(p, -1) for p in parentNames] # indices
 
     names, parents, matrices = topologicalSort(names, parents, matrices)
-    # TODO: return root name (if any)
     return names, parents, matrices, roots[0]
 
 def parseAnimation(filename):
