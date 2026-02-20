@@ -1,12 +1,35 @@
 TODO:
+  ☐ fix warnings in GLTF @high
+  ☐ support multi-mesh in skeletons @high
+  ☐ remove const values (anim + nodes, size=1, translation=0) @low
+  ☐ include texture @low
   ✔ fix errors @high
-  ☐ fix warnings in GLTF
-  ☐ merge some files into single file (plants, treasures, building) @high
-  ☐ include texture
+  ✔ merge some files into single file (plants, treasures, building) @high
   ✔ (save as output folders) @ low
   ✔ some skeletons do not work (vikings_warrior) @high
-  ☐ resources should not contain skeleton/animations (should merge into peon) @high
+  ✔ resources should not contain skeleton/animations (should merge into peon) @high
   ✔ some bad skinning (chicken, vikings_peon) @high
+  ✔ check that everything is exported @high
+    misc/wood_fragment_1.xml
+    natives/warrior/native_warrior_low_poly_spear.xml
+    vikings/warrior/warrior_billboards.xml
+    vikings/warrior/warrior_low_poly_axe.xml
+
+WARN:
+NODE_SKINNED_MESH_LOCAL_TRANSFORMS  Local transforms will not affect a skinned mesh.  /nodes/0
+INFO:
+UNUSED_OBJECT  This object may be unused.  /meshes/0/primitives/0/attributes/TEXCOORD_0
+
+
+
+
+
+
+
+
+
+
+
 
 FILES_WITH_ERRORS:
   ✔ natives_chieftain
