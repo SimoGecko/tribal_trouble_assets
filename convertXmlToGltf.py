@@ -255,6 +255,7 @@ def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=No
     nodes = []
     skins = []
     animations = []
+    scene = []
 
 
     # root
@@ -263,6 +264,7 @@ def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=No
         "rotation": [-0.70710678, 0.0, 0.0, 0.70710678],
         "children": [],
     })
+    scene.append(0)
 
     def addAccessor(values, type, semantic=None, extra=None):
         nonlocal raw_buffer
@@ -329,12 +331,14 @@ def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=No
     if skeleton_file:
         names, parents, matrices, rootName = parseSkeleton(skeleton_file)
 
+        '''
         rootJointIdx = len(nodes)
         nodes.append({
             "name": rootName,
             "children": [],
         })
         nodes[0]["children"].append(rootJointIdx)
+        '''
         
         global bone_to_joint
         bone_to_joint = {}
@@ -356,11 +360,12 @@ def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=No
                     parNode["children"] = []
                 parNode["children"].append(joints[i])
             else:
-                nodes[rootJointIdx]["children"].append(joints[i]) # root node is parent of root bone
+                nodes[0]["children"].append(joints[i]) # root node is parent of root bone
 
         matrices_flat = [f for mat in matrices for f in invT(mat)] # invT is probably just ortho-normalizing
 
         skins.append({
+            "name": rootName,
             "joints": joints, # indices of nodes that act as bones
             "inverseBindMatrices": addAccessor(matrices_flat, "MAT4f", "IBM"), # accessor of 4x4 matrix
             "skeleton": 0, #joints[0], # node of the hierarchy root
@@ -440,10 +445,14 @@ def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=No
             "name": f"{meshName}",
             "mesh": mesh_index,
         }
+        nodeIdx = len(nodes)
         if isSkinned:
             node["skin"] = 0
+            scene.append(nodeIdx)
+        else:
+            nodes[0]["children"].append(nodeIdx)
+        
         nodes.append(node)
-        nodes[0]["children"].append(len(nodes)-1)
             
 
     #switch nodes
@@ -471,7 +480,7 @@ def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=No
         "nodes": nodes,
         "skins": skins,
         "animations": animations,
-        "scenes": [{"nodes": [0]}], # [{"nodes": list(range(len(nodes)))}],
+        "scenes": [{"nodes": scene}],
     }
     
     if skins == []:
