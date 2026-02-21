@@ -25,6 +25,16 @@
 
 <geometry>
 	<group name="vikings">
+		<!--
+		<sprite name="warrior_billboard">
+			<model r="90" g="60" b="30">
+				vikings/warrior/warrior_billboards.xml
+				<texture name="viking_warrior_rock" team="viking_warrior_rock_team"/>
+				<texture name="viking_warrior_iron" team="viking_warrior_iron_team"/>
+				<texture name="viking_warrior_rubber" team="viking_warrior_rubber_team"/>
+			</model>
+		</sprite>
+		-->
 		<sprite name="warrior">
 			<skeleton>vikings/warrior/warrior_skeleton.xml</skeleton>
 			<model r="90" g="60" b="30">
@@ -71,37 +81,17 @@
 				vikings/peon/peon_low_poly_mesh.xml
 				<texture name="viking_peon" team="viking_peon_team"/>
 			</model>
-			<animation wpc="1" type="loop">vikings/peon/peon_idle.xml</animation>
-			<animation wpc="3.85" type="loop">vikings/peon/peon_run.xml</animation>
-			<animation wpc="1" type="plain">vikings/peon/peon_attack.xml</animation>
-			<animation wpc="1" type="plain">vikings/peon/peon_die.xml</animation>
-		</sprite>
-		<sprite name="rock_resource">
-			<skeleton>vikings/peon/peon_skeleton.xml</skeleton>
-			<model r="90" g="60" b="30">
+
+			<model r="90" g="60" b="30" name="rock_resource">
 				misc/rock_fragment_viking.xml
 				<texture name="Generator:com.oddlabs.tt.procedural.GeneratorRock"/>
 				<texture name="Generator:com.oddlabs.tt.procedural.GeneratorIron"/>
 			</model>
-			<animation wpc="1" type="loop">vikings/peon/peon_idle.xml</animation>
-			<animation wpc="3.85" type="loop">vikings/peon/peon_run.xml</animation>
-			<animation wpc="1" type="plain">vikings/peon/peon_attack.xml</animation>
-			<animation wpc="1" type="plain">vikings/peon/peon_die.xml</animation>
-		</sprite>
-		<sprite name="wood_resource">
-			<skeleton>vikings/peon/peon_skeleton.xml</skeleton>
-			<model r="90" g="60" b="30">
+			<model r="90" g="60" b="30" name="wood_resource">
 				misc/wood_fragment_viking.xml
 				<texture name="wood_fragments"/>
 			</model>
-			<animation wpc="1" type="loop">vikings/peon/peon_idle.xml</animation>
-			<animation wpc="3.85" type="loop">vikings/peon/peon_run.xml</animation>
-			<animation wpc="1" type="plain">vikings/peon/peon_attack.xml</animation>
-			<animation wpc="1" type="plain">vikings/peon/peon_die.xml</animation>
-		</sprite>
-		<sprite name="rubber_resource">
-			<skeleton>vikings/peon/peon_skeleton.xml</skeleton>
-			<model r="90" g="60" b="30">
+			<model r="90" g="60" b="30" name="rubber_resource">
 				misc/rubber_fragment_viking.xml
 				<texture name="chicken"/>
 			</model>
@@ -117,6 +107,12 @@
 				<texture name="viking_warrior_iron"/>
 				<texture name="viking_warrior_rubber"/>
 			</model>
+			<model r="90" g="60" b="30">
+				vikings/warrior/warrior_low_poly_axe.xml
+				<texture name="viking_warrior_rock"/>
+				<texture name="viking_warrior_iron"/>
+				<texture name="viking_warrior_rubber"/>
+			</model>
 		</sprite>
 		<sprite name="quarters">
 			<model r="90" g="60" b="30">
@@ -127,8 +123,6 @@
 				vikings/quarters/viking_main_built_lo.xml
 				<texture name="viking_buildings_lo" team="viking_buildings_lo_team"/>
 			</model>
-		</sprite>
-		<sprite name="quarters_halfbuilt">
 			<model r="90" g="60" b="30">
 				vikings/quarters/viking_main_build.xml
 				<texture name="viking_buildings_hi" team="viking_buildings_hi_team"/>
@@ -137,8 +131,6 @@
 				vikings/quarters/viking_main_build_lo.xml
 				<texture name="viking_buildings_lo2" team="viking_buildings_lo2_team"/>
 			</model>
-		</sprite>
-		<sprite name="quarters_start">
 			<model r="90" g="60" b="30">
 				vikings/quarters/viking_main_start.xml
 				<texture name="viking_buildings_hi" team="viking_buildings_hi_team"/>
@@ -157,8 +149,6 @@
 				vikings/armory/viking_armoury_built_lo.xml
 				<texture name="viking_buildings_lo2" team="viking_buildings_lo2_team"/>
 			</model>
-		</sprite>
-		<sprite name="armory_halfbuilt">
 			<model r="90" g="60" b="30">
 				vikings/armory/viking_armoury_build.xml
 				<texture name="viking_buildings_hi" team="viking_buildings_hi_team"/>
@@ -167,8 +157,6 @@
 				vikings/armory/viking_armoury_build_lo.xml
 				<texture name="viking_buildings_lo" team="viking_buildings_lo_team"/>
 			</model>
-		</sprite>
-		<sprite name="armory_start">
 			<model r="90" g="60" b="30">
 				vikings/armory/viking_armoury_start.xml
 				<texture name="viking_buildings_hi" team="viking_buildings_hi_team"/>
@@ -187,8 +175,6 @@
 				vikings/tower/viking_tower_built_low.xml
 				<texture name="viking_building_lookout" team="viking_building_lookout_team"/>
 			</model>
-		</sprite>
-		<sprite name="tower_halfbuilt">
 			<model r="90" g="60" b="30">
 				vikings/tower/viking_tower_halfbuilt.xml
 				<texture name="viking_building_lookout" team="viking_building_lookout_team"/>
@@ -197,8 +183,6 @@
 				vikings/tower/viking_tower_halfbuilt_low.xml
 				<texture name="viking_building_lookout" team="viking_building_lookout_team"/>
 			</model>
-		</sprite>
-		<sprite name="tower_start">
 			<model r="90" g="60" b="30">
 				vikings/tower/viking_tower_start.xml
 				<texture name="viking_building_lookout" team="viking_building_lookout_team"/>
@@ -242,6 +226,21 @@
 				natives/peon/native_peon_low_poly_mesh.xml
 				<texture name="native_peon" team="native_peon_team"/>
 			</model>
+
+			<model r="90" g="60" b="30" name="rock_resource">
+				misc/rock_fragment_native.xml
+				<texture name="Generator:com.oddlabs.tt.procedural.GeneratorRock"/>
+				<texture name="Generator:com.oddlabs.tt.procedural.GeneratorIron"/>
+			</model>
+			<model r="90" g="60" b="30" name="wood_resource">
+				misc/wood_fragment_native.xml
+				<texture name="wood_fragments"/>
+			</model>
+			<model r="90" g="60" b="30" name="rubber_resource">
+				misc/rubber_fragment_native.xml
+				<texture name="chicken"/>
+			</model>
+
 			<animation wpc="1" type="loop">natives/peon/peon_idle.xml</animation>
 			<animation wpc="3.625" type="loop">natives/peon/peon_run.xml</animation>
 			<animation wpc="1" type="plain">natives/peon/peon_attack.xml</animation>
@@ -266,40 +265,6 @@
 			<animation wpc="1" type="plain">natives/warrior/native_warrior_attack.xml</animation>
 			<animation wpc="1" type="plain">natives/warrior/native_warrior_die.xml</animation>
 		</sprite>
-		<sprite name="rock_resource">
-			<skeleton>natives/peon/peon_skeleton.xml</skeleton>
-			<model r="90" g="60" b="30">
-				misc/rock_fragment_native.xml
-				<texture name="Generator:com.oddlabs.tt.procedural.GeneratorRock"/>
-				<texture name="Generator:com.oddlabs.tt.procedural.GeneratorIron"/>
-			</model>
-			<animation wpc="1" type="loop">natives/peon/peon_idle.xml</animation>
-			<animation wpc="3.625" type="loop">natives/peon/peon_run.xml</animation>
-			<animation wpc="1" type="plain">natives/peon/peon_attack.xml</animation>
-			<animation wpc="1" type="plain">natives/peon/peon_die.xml</animation>
-		</sprite>
-		<sprite name="wood_resource">
-			<skeleton>natives/peon/peon_skeleton.xml</skeleton>
-			<model r="90" g="60" b="30">
-				misc/wood_fragment_native.xml
-				<texture name="wood_fragments"/>
-			</model>
-			<animation wpc="1" type="loop">natives/peon/peon_idle.xml</animation>
-			<animation wpc="3.625" type="loop">natives/peon/peon_run.xml</animation>
-			<animation wpc="1" type="plain">natives/peon/peon_attack.xml</animation>
-			<animation wpc="1" type="plain">natives/peon/peon_die.xml</animation>
-		</sprite>
-		<sprite name="rubber_resource">
-			<skeleton>natives/peon/peon_skeleton.xml</skeleton>
-			<model r="90" g="60" b="30">
-				misc/rubber_fragment_native.xml
-				<texture name="chicken"/>
-			</model>
-			<animation wpc="1" type="loop">natives/peon/peon_idle.xml</animation>
-			<animation wpc="3.625" type="loop">natives/peon/peon_run.xml</animation>
-			<animation wpc="1" type="plain">natives/peon/peon_attack.xml</animation>
-			<animation wpc="1" type="plain">natives/peon/peon_die.xml</animation>
-		</sprite>
 		<sprite name="quarters">
 			<model r="90" g="60" b="30">
 				natives/quarters/native_built_hi.xml
@@ -309,8 +274,6 @@
 				natives/quarters/native_built_lo.xml
 				<texture name="native_building_lo" team="native_building_lo_team"/>
 			</model>
-		</sprite>
-		<sprite name="quarters_halfbuilt">
 			<model r="90" g="60" b="30">
 				natives/quarters/native_build_hi.xml
 				<texture name="native_building_hi" team="native_building_hi_team"/>
@@ -319,8 +282,6 @@
 				natives/quarters/native_build_lo-new.xml
 				<texture name="native_building_lo" team="native_building_lo_team"/>
 			</model>
-		</sprite>
-		<sprite name="quarters_start">
 			<model r="90" g="60" b="30">
 				natives/quarters/native_start_hi.xml
 				<texture name="native_building_hi" team="native_building_hi_team"/>
@@ -339,8 +300,6 @@
 				natives/armory/build_armoury_built_lo.xml
 				<texture name="native_armoury_lo" team="native_armoury_lo_team"/>
 			</model>
-		</sprite>
-		<sprite name="armory_halfbuilt">
 			<model r="90" g="60" b="30">
 				natives/armory/build_armoury_build_hi.xml
 				<texture name="native_building_hi" team="native_building_hi_team"/>
@@ -349,8 +308,6 @@
 				natives/armory/build_armoury_build_lo.xml
 				<texture name="native_armoury_lo" team="native_armoury_lo_team"/>
 			</model>
-		</sprite>
-		<sprite name="armory_start">
 			<model r="90" g="60" b="30">
 				natives/armory/build_armoury_start_hi.xml
 				<texture name="native_building_hi" team="native_building_hi_team"/>
@@ -369,8 +326,6 @@
 				natives/tower/native_tower_built_lo.xml
 				<texture name="native_tower" team="native_tower_team"/>
 			</model>
-		</sprite>
-		<sprite name="tower_halfbuilt">
 			<model r="90" g="60" b="30">
 				natives/tower/native_tower_build_hi.xml
 				<texture name="native_tower" team="native_tower_team"/>
@@ -379,8 +334,6 @@
 				natives/tower/native_tower_build_lo.xml
 				<texture name="native_tower" team="native_tower_team"/>
 			</model>
-		</sprite>
-		<sprite name="tower_start">
 			<model r="90" g="60" b="30">
 				natives/tower/native_tower_start_hi.xml
 				<texture name="native_tower" team="native_tower_team"/>
@@ -403,79 +356,76 @@
 				<texture name="native_warrior_iron"/>
 				<texture name="native_warrior_rubber"/>
 			</model>
+			<model r="90" g="60" b="30">
+				natives/warrior/native_warrior_low_poly_spear.xml
+				<texture name="native_warrior_rock"/>
+				<texture name="native_warrior_iron"/>
+				<texture name="native_warrior_rubber"/>
+			</model>
 		</sprite>
 	</group>
 	<group name="misc">
-		<sprite name="jungle_tree_crown">
+		<sprite name="jungle_tree">
 			<model r="32" g="64" b="0">
 				misc/tree_flat.xml
 				<texture name="trees"/>
 			</model>
-		</sprite>
-		<sprite name="jungle_tree_trunk">
 			<model r="32" g="64" b="0">
 				misc/tree_mesh.xml
 				<texture name="trees"/>
 			</model>
-		</sprite>
-		<lowdetail name="tree_low">
 			<model r="32" g="64" b="0">
 				misc/tree_billboard.xml
 			</model>
-		</lowdetail>
-		<sprite name="palm_crown">
+		</sprite>
+		<sprite name="palm">
 			<model r="32" g="64" b="0">
 				misc/palm_flat.xml
 				<texture name="trees"/>
 			</model>
-		</sprite>
-		<sprite name="palm_trunk">
 			<model r="32" g="64" b="0">
 				misc/palm_mesh.xml
 				<texture name="trees"/>
 			</model>
-		</sprite>
-		<lowdetail name="palm_low">
 			<model r="32" g="64" b="0">
 				misc/palm_billboard.xml
 			</model>
-		</lowdetail>
+		</sprite>
 
-		<sprite name="oak_tree_crown">
+		<sprite name="oak_tree">
 			<model r="0" g="0" b="0">
 				misc/oak_flat.xml
 				<texture name="viking_trees"/>
 			</model>
-		</sprite>
-		<sprite name="oak_tree_trunk">
 			<model r="0" g="0" b="0">
 				misc/oak_mesh.xml
 				<texture name="viking_trees"/>
 			</model>
-		</sprite>
-		<lowdetail name="oak_tree_low">
 			<model r="32" g="64" b="0">
 				misc/oak_billboard.xml
 			</model>
-		</lowdetail>
-		<sprite name="pine_tree_crown">
+		</sprite>
+
+		<sprite name="pine_tree">
 			<model r="0" g="0" b="0">
 				misc/pine_flat.xml
 				<texture name="viking_trees"/>
 			</model>
-		</sprite>
-		<sprite name="pine_tree_trunk">
 			<model r="0" g="0" b="0">
 				misc/pine_mesh.xml
 				<texture name="viking_trees"/>
 			</model>
-		</sprite>
-		<lowdetail name="pine_tree_low">
 			<model r="32" g="64" b="0">
 				misc/pine_billboard.xml
 			</model>
-		</lowdetail>
+		</sprite>
 		
+		<sprite name="wood_1">
+			<model r="90" g="60" b="30">
+				misc/wood_fragment_1.xml
+				<texture name="wood_fragments"/>
+			</model>
+		</sprite>
 		<sprite name="wood_2">
 			<model r="90" g="60" b="30">
 				misc/wood_fragment_2.xml
