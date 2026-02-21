@@ -342,15 +342,6 @@ def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=No
 
     if skeleton_file:
         names, parents, matrices, rootName = parseSkeleton(skeleton_file)
-
-        '''
-        rootJointIdx = len(nodes)
-        nodes.append({
-            "name": rootName,
-            "children": [],
-        })
-        nodes[0]["children"].append(rootJointIdx)
-        '''
         
         global bone_to_joint
         bone_to_joint = {}
@@ -382,6 +373,7 @@ def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=No
             "inverseBindMatrices": addAccessor(inverseBindMatrices, "MAT4f", "IBM"), # accessor of 4x4 matrix
             "skeleton": 0, #joints[0], # node of the hierarchy root
         })
+        nodes[0]["name"] = rootName
         
     for animation_index, filename in enumerate(animation_files):
         frames = parseAnimation(filename)
