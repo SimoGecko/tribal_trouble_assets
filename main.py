@@ -37,10 +37,14 @@ def process_geometry(xml_path):
                 r, g, b,  = float(model.attrib["r"]), float(model.attrib["g"]), float(model.attrib["b"])
 
                 # NOTES: this might be dupe since we have multiple models
+                textures = []
+                teams = []
                 for texture in model.findall("texture"):
                     texture_file = root + "texture/models/" + clean(texture.attrib["name"]) + ".png"
                     team_file    = root + "texture/teamdecals/" + clean(texture.get("team", "")) + ".png"
-                    texture_files.append(texture_file)
+                    textures.append(texture_file)
+                    teams.append(team_file)
+                texture_files.append(textures)
 
             # ---- Animations ----
             for anim in sprite.findall("animation"):

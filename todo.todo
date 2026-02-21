@@ -1,8 +1,9 @@
 TODO:
-  ☐ fix warnings in GLTF @high
-  ☐ support multi-mesh in skeletons @high
-  ☐ remove const values (anim + nodes, size=1, translation=0) @low
+  ☐ if lowpoly, don't add to scene @high
   ☐ include texture @low
+  ✔ remove const values (anim + nodes, size=1, translation=0) @low
+  ✔ fix warnings (1) in GLTF @high
+  ✔ support multi-mesh in skeletons @high
   ✔ fix errors @high
   ✔ merge some files into single file (plants, treasures, building) @high
   ✔ (save as output folders) @ low
@@ -16,7 +17,7 @@ TODO:
     vikings/warrior/warrior_low_poly_axe.xml
 
 WARN:
-NODE_SKINNED_MESH_LOCAL_TRANSFORMS  Local transforms will not affect a skinned mesh.  /nodes/0
+ ✔ NODE_SKINNED_MESH_LOCAL_TRANSFORMS  Local transforms will not affect a skinned mesh.  /nodes/0
 INFO:
 UNUSED_OBJECT  This object may be unused.  /meshes/0/primitives/0/attributes/TEXCOORD_0
 

@@ -383,7 +383,6 @@ def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=No
             "skeleton": 0, #joints[0], # node of the hierarchy root
         })
         
-    anim_accessors = 0
     for animation_index, filename in enumerate(animation_files):
         frames = parseAnimation(filename)
 
@@ -423,12 +422,9 @@ def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=No
                 sampler_idx = len(animation["samplers"])
                 animation["samplers"].append({"input": time_accessor, "output": accessor_idx, "interpolation": "LINEAR"})
                 animation["channels"].append({"sampler": sampler_idx, "target": {"node": joints[bone_index], "path": channel}})
-                anim_accessors += 1
             
         animations.append(animation)
 
-    print("anim accessors: ", anim_accessors)
-    
     for mesh_index, filename in enumerate(mesh_files):
         isSkinned = skeleton_file is not None
         positions, normals, colors, uvs, indices, joints, weights = parseMesh(filename, isSkinned)
