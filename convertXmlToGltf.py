@@ -95,23 +95,23 @@ def parseMesh(filename, isSkinned = False):
             if key not in vertex_map:
                 vertex_map[key] = current_index
                 current_index += 1
-                positions.extend([x, y, z])
-                normals.extend([nx, ny, nz])
-                colors.extend([r, g, b, a])
-                uvs.extend([u, v])
-                joints.extend(js)
-                weights.extend(ws)
+                positions.append([x, y, z])
+                normals.append([nx, ny, nz])
+                colors.append([r, g, b, a])
+                uvs.append([u, v])
+                joints.append(js)
+                weights.append(ws)
             
             poly_indices.append(vertex_map[key])
         
         # Assuming all polygons are triangles
         if len(poly_indices) == 3:
-            indices.extend(poly_indices)
+            indices.append(poly_indices)
         elif len(poly_indices) > 3:
             warn('not a triangle - triangulating')
             # Triangulate simple convex polygon (fan method)
             for i in range(1, len(poly_indices)-1):
-                indices.extend([poly_indices[0], poly_indices[i], poly_indices[i+1]])
+                indices.append([poly_indices[0], poly_indices[i], poly_indices[i+1]])
 
     return positions, normals, colors, uvs, indices, joints, weights
 
@@ -270,6 +270,9 @@ def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=No
         nonlocal raw_buffer
         nonlocal byte_offset
 
+        if isinstance(values[0], list): # list of vectors        
+            values = [f for vec in values for f in vec] # flatten list of vectors to list of floats/ints
+
         isIndices = type == "SCALARu" # Hacky
         isFloat = type[-1] == "f"
         type = type[:-1]
@@ -362,15 +365,16 @@ def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=No
             else:
                 nodes[0]["children"].append(joints[i]) # root node is parent of root bone
 
-        matrices_flat = [f for mat in matrices for f in invT(mat)] # invT is probably just ortho-normalizing
+        inverseBindMatrices = [invT(mat) for mat in matrices]
 
         skins.append({
             "name": rootName,
             "joints": joints, # indices of nodes that act as bones
-            "inverseBindMatrices": addAccessor(matrices_flat, "MAT4f", "IBM"), # accessor of 4x4 matrix
+            "inverseBindMatrices": addAccessor(inverseBindMatrices, "MAT4f", "IBM"), # accessor of 4x4 matrix
             "skeleton": 0, #joints[0], # node of the hierarchy root
         })
         
+    anim_accessors = 0
     for animation_index, filename in enumerate(animation_files):
         frames = parseAnimation(filename)
 
@@ -391,7 +395,6 @@ def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=No
             i = bone_index
             for matrices in frames:
                 mat = inverseMult(matrices[parents[i]], matrices[i]) if parents[i] != -1 else matrices[i]
-                #mat = matrices[i]
 
                 t, r, s = decompose_matrix(mat)
                 translations.append(t)
@@ -399,9 +402,11 @@ def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=No
                 scales.append(s)
             
             # add accessors for times and values
-            trans_accessor = addAccessor([v for t in translations for v in t], "VEC3f", "Anim")
-            rot_accessor   = addAccessor([v for r in rotations for v in r], "VEC4f", "Anim")
-            scale_accessor = addAccessor([v for s in scales for v in s], "VEC3f", "Anim")
+            trans_accessor = addAccessor(translations, "VEC3f", "Anim")
+            rot_accessor   = addAccessor(rotations, "VEC4f", "Anim")
+            scale_accessor = addAccessor(scales, "VEC3f", "Anim")
+            
+            anim_accessors += 3
             
             for accessor, path in zip([trans_accessor, rot_accessor, scale_accessor], ["translation", "rotation", "scale"]):
                 sampler_idx = len(animation["samplers"])
@@ -410,13 +415,15 @@ def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=No
 
         animations.append(animation)
 
+    print("anim accessors: ", anim_accessors)
+    
     for mesh_index, filename in enumerate(mesh_files):
         isSkinned = skeleton_file is not None
         positions, normals, colors, uvs, indices, joints, weights = parseMesh(filename, isSkinned)
 
         # Bounding box
-        position_min = [min(positions[i::3]) for i in range(3)]
-        position_max = [max(positions[i::3]) for i in range(3)]
+        position_min = [min(p[i] for p in positions) for i in range(3)]
+        position_max = [max(p[i] for p in positions) for i in range(3)]
 
         attributes = {
             "POSITION":   addAccessor(positions, "VEC3f", None, {"min": position_min, "max": position_max}),
