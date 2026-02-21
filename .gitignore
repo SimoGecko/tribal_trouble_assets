@@ -1,4 +1,5 @@
 *.xml
 *.gltf
+*.zip
 output/
 __pycache__/
