@@ -17,12 +17,22 @@ The following assets are included:
 ![assets_misc](images/assets_misc.png)
 
 - Most assets include **low-poly versions**.  
-- Buildings also include **half-built variants**.
+- Buildings also include **half-built and start variants**.
 
 ## Animations
 Character models are **skinned** and include a **skeleton with multiple animations**.  
 
 ![natives_warrior_run](images/natives_warrior_run.gif)
+
+## Textures
+Textures for models and team decals are also provided. Textures have been re-encoded to `.png` to remove some encoding errors and slightly reduce size. No quality loss.
+
+In addition, textures that the game generates procedurally are also provided, for things like rocks and environments.
+![textures_procedural](images/textures_procedural.png)
+
+With them, it's possible to texture both tropical and northern environments.
+![island](images/island.png)
+
 
 ## Running the script
 

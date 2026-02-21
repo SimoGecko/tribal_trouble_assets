@@ -8,6 +8,7 @@ Get-ChildItem -Recurse -Filter *.png | ForEach-Object {
 '''
 
 start_folder = Path("x:/Github/tribaltrouble/tt/textures")
+#start_folder = Path("x:/Dev/tribaltrouble_asset_converter/output/textures/procedural/")
 
 for img_path in start_folder.rglob("*.png"):
     try:
