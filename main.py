@@ -62,4 +62,4 @@ def process_geometry(xml_path):
             print(f"Processing {asset_name}...")
             convertXmlToGltf(asset_name, mesh_files, texture_files, skeleton_file, animation_files)
 
-process_geometry(root + "geometry/geometry.xml")
+process_geometry("geometry.xml")

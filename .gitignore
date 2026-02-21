@@ -1,4 +1,8 @@
 *.gltf
 *.zip
 output/
+models/
+textures/
 __pycache__/
+todo.todo
+check_references.py

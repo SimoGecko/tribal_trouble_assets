@@ -7,10 +7,9 @@ Get-ChildItem -Recurse -Filter *.png | ForEach-Object {
 }
 '''
 
-start_folder = Path("x:/Github/tribaltrouble/tt/textures")
-#start_folder = Path("x:/Dev/tribaltrouble_asset_converter/output/textures/procedural/")
+root = "x:/Github/tribaltrouble/tt/textures"
 
-for img_path in start_folder.rglob("*.png"):
+for img_path in Path(root).rglob("*.png"):
     try:
         img = Image.open(img_path)
         img.save(img_path, optimize=True)
