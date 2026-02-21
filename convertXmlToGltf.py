@@ -9,11 +9,6 @@ from pathlib import Path
 
 bone_to_joint = None # needed by Mesh and Animation. boneName => jointIndex
 
-# TODO: Organize script
-# 1. Parse raw data
-# 2. Transform data (normalize, rotate, clean, toposort, ...)
-# 3. Write to gltf
-
 def warn(msg):
     print(f"\033[38;5;208mWARNING: {msg}\033[0m")
 
@@ -26,7 +21,7 @@ def clean_TRS(t, r, s, eps=1e-5):
     s = [clean(x) for x in s]
     return t, r, s
 
-def parseMesh(filename, isSkinned = False):
+def parseMesh(filename, isSkinned=False):
     tree = ET.parse(filename)
     root = tree.getroot()
 
@@ -42,10 +37,6 @@ def parseMesh(filename, isSkinned = False):
     vertex_map = {}
     current_index = 0
 
-    def rotate(x,y,z):
-        # -90 deg X rotation
-        return x, z, -y
-
     def normalize(x, y, z):
         length = math.sqrt(x**2 + y**2 + z**2)
         if length > 0:
@@ -58,14 +49,14 @@ def parseMesh(filename, isSkinned = False):
         # remove 0-weight joints. sum duplicate joints. sort decreasing. add padding
         jw = {}
         for j, w in zip(js, ws):
-            if w > 0: jw[j] = jw.get(j,0)+w
-        jw = sorted(jw.items(), key=lambda x:-x[1])[:4]
-        js_out = [j for j,w in jw] + [0]*(4-len(jw))
-        ws_out = [w for j,w in jw] + [0]*(4-len(jw))
+            if w > 0: jw[j] = jw.get(j,0) + w
+        jw = sorted(jw.items(), key=lambda x: -x[1])[:4]
+        js_out = [j for j, w in jw] + [0] * (4 - len(jw))
+        ws_out = [w for j, w in jw] + [0] * (4 - len(jw))
         s = sum(ws_out)
         assert(s > 0)
-        if s: ws_out = [w/s for w in ws_out]
-        else: js_out, ws_out = [js[0],0,0,0],[1,0,0,0]
+        if s: ws_out = [w / s for w in ws_out]
+        else: js_out, ws_out = [js[0], 0, 0, 0], [1, 0, 0, 0]
         return js_out, ws_out
 
     # Go through polygons
@@ -77,7 +68,7 @@ def parseMesh(filename, isSkinned = False):
             nx, ny, nz = float(vertex.attrib["nx"]), float(vertex.attrib["ny"]), float(vertex.attrib["nz"])
             r, g, b, a = float(vertex.attrib["r"]), float(vertex.attrib["g"]), float(vertex.attrib["b"]), float(vertex.attrib["a"])
             u, v = float(vertex.attrib["u"]), float(vertex.attrib["v"])
-            
+
             js = []
             ws = []
             if isSkinned:
@@ -88,15 +79,11 @@ def parseMesh(filename, isSkinned = False):
                     assert(boneName in bone_to_joint)
                     js.append(bone_to_joint[boneName])
                     ws.append(weight)
-
                 js, ws = cleanJointsAndWeights(js, ws)
 
             # Transform data
-            #x, y, z = rotate(x, y, z) # rotate X -90 deg to align up
-            #nx, ny, nz = rotate(nx, ny, nz)
             nx, ny, nz = normalize(nx, ny, nz)
             v = 1.0 - v # flip uv
-
 
             key = (x, y, z, nx, ny, nz, r, g, b, a, u, v)
             if isSkinned:
@@ -110,24 +97,22 @@ def parseMesh(filename, isSkinned = False):
                 uvs.append([u, v])
                 joints.append(js)
                 weights.append(ws)
-            
+
             poly_indices.append(vertex_map[key])
-        
+
         # Assuming all polygons are triangles
         if len(poly_indices) == 3:
             indices.append(poly_indices)
         elif len(poly_indices) > 3:
             warn('not a triangle - triangulating')
             # Triangulate simple convex polygon (fan method)
-            for i in range(1, len(poly_indices)-1):
-                indices.append([poly_indices[0], poly_indices[i], poly_indices[i+1]])
+            for i in range(1, len(poly_indices) - 1):
+                indices.append([poly_indices[0], poly_indices[i], poly_indices[i + 1]])
 
     return positions, normals, colors, uvs, indices, joints, weights
 
 def topologicalSort(names, parents, matrices):
-    # Topological sort
     topological_index = []
-
     added = set()
     def topoSort(i):
         if i in added:
@@ -211,8 +196,8 @@ def parseAnimation(filename):
     return frames
 
 def inverseMult(A, B):
-    matA = np.array(A, dtype=np.float32).reshape(4,4)
-    matB = np.array(B, dtype=np.float32).reshape(4,4)
+    matA = np.array(A, dtype=np.float32).reshape(4, 4)
+    matB = np.array(B, dtype=np.float32).reshape(4, 4)
     matA_inv = np.linalg.inv(matA)
     result = matA_inv @ matB
     result_flat = result.reshape(-1).tolist()
@@ -227,12 +212,10 @@ def invT(A):
     return result_flat
 
 def decompose_matrix(mat4):
-    m = np.array(mat4, dtype=np.float32).reshape(4,4)
+    m = np.array(mat4, dtype=np.float32).reshape(4, 4)
     t = m[:3, 3].tolist()
-
     # Extract 3x3 linear part
     M = m[:3, :3].astype(np.float64)
-
     # Use SVD to robustly separate rotation and scale (polar decomposition)
     U, Svals, Vt = np.linalg.svd(M)
     R_mat = (U @ Vt)
@@ -240,19 +223,15 @@ def decompose_matrix(mat4):
     if np.linalg.det(R_mat) < 0:
         U[:, -1] *= -1
         R_mat = U @ Vt
-
     # Svals are the singular values ~ scale along principal axes
     s = [float(Svals[0]), float(Svals[1]), float(Svals[2])]
-
     # Convert rotation matrix to quaternion
     r = R.from_matrix(R_mat).as_quat().tolist()
-
     # convert to python arrays
     t = [float(x) for x in t]
     r = [float(x) for x in r]
     s = [float(x) for x in s]
     return t, r, s
-
 
 def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=None, animation_files=None):
     raw_buffer = b""
@@ -266,29 +245,27 @@ def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=No
     animations = []
     scene = []
 
-
     # root
     nodes.append({
-        "name": "Root", # Scene_root
+        "name": "Root",
         "rotation": [-0.70710678, 0.0, 0.0, 0.70710678],
         "children": [],
     })
     scene.append(0)
 
-    def addAccessor(values, type, semantic=None, extra=None):
-        nonlocal raw_buffer
-        nonlocal byte_offset
+    def addAccessor(values, vtype, semantic=None, extra=None):
+        nonlocal raw_buffer, byte_offset
 
-        if isinstance(values[0], list): # list of vectors        
+        if isinstance(values[0], list):
             values = [f for vec in values for f in vec] # flatten list of vectors to list of floats/ints
 
-        isIndices = type == "SCALARu" # Hacky
-        isFloat = type[-1] == "f"
-        type = type[:-1]
+        isIndices = vtype == "SCALARu" # Hacky
+        isFloat = vtype[-1] == "f"
+        base_type = vtype[:-1]
 
         N = len(values)
-        form = f"<{N}f" if isFloat else f"<{N}H" # <100f = little-endian, 100 floats
-        data = struct.pack(form, *values) # bytes array
+        fmt = f"<{N}f" if isFloat else f"<{N}H" # <100f = little-endian, 100 floats
+        data = struct.pack(fmt, *values) # bytes array
 
         # Constants
         ARRAY_BUFFER = 34962
@@ -322,15 +299,15 @@ def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=No
             "byteOffset": byte_offset,
             "byteLength": len(data),
         }
-        if semantic == None:
+        if semantic is None:
             bufferView["target"] = ARRAY_BUFFER if not isIndices else ELEMENT_ARRAY_BUFFER
         byte_offset += len(data)
 
         accessor = {
             "bufferView": len(bufferViews),
-            "componentType": FLOAT if isFloat else USHORT, 
-            "count": len(values) // TYPECOUNTS[type],
-            "type": type,
+            "componentType": FLOAT if isFloat else USHORT,
+            "count": len(values) // TYPECOUNTS[base_type],
+            "type": base_type,
         }
         if extra:
             accessor.update(extra)
@@ -342,7 +319,7 @@ def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=No
 
     if skeleton_file:
         names, parents, matrices, rootName = parseSkeleton(skeleton_file)
-        
+
         global bone_to_joint
         bone_to_joint = {}
         #bone_to_joint = {name: i for i, name in enumerate(names)}
@@ -350,7 +327,7 @@ def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=No
         for i, name in enumerate(names):
             bone_to_joint[name] = i
             joints.append(len(nodes)) # joint to node index
-            
+
             matLocal = inverseMult(matrices[parents[i]], matrices[i]) if parents[i] != -1 else matrices[i]
             nodes.append({
                 "name": name,
@@ -363,7 +340,7 @@ def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=No
                     parNode["children"] = []
                 parNode["children"].append(joints[i])
             else:
-                nodes[0]["children"].append(joints[i]) # root node is parent of root bone
+                nodes[0]["children"].append(joints[i])
 
         inverseBindMatrices = [invT(mat) for mat in matrices]
 
@@ -426,15 +403,15 @@ def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=No
         position_max = [max(p[i] for p in positions) for i in range(3)]
 
         attributes = {
-            "POSITION":   addAccessor(positions, "VEC3f", None, {"min": position_min, "max": position_max}),
-            "NORMAL":     addAccessor(normals, "VEC3f"),
-            "COLOR_0":    addAccessor(colors, "VEC4f"),
+            "POSITION": addAccessor(positions, "VEC3f", None, {"min": position_min, "max": position_max}),
+            "NORMAL": addAccessor(normals, "VEC3f"),
+            "COLOR_0": addAccessor(colors, "VEC4f"),
             "TEXCOORD_0": addAccessor(uvs, "VEC2f"),
         }
         if isSkinned:
             attributes.update({
-                "JOINTS_0":   addAccessor(joints, "VEC4u"),
-                "WEIGHTS_0":  addAccessor(weights, "VEC4f"),
+                "JOINTS_0": addAccessor(joints, "VEC4u"),
+                "WEIGHTS_0": addAccessor(weights, "VEC4f"),
             })
 
         meshName = Path(filename).stem
@@ -458,11 +435,9 @@ def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=No
             scene.append(nodeIdx)
         else:
             nodes[0]["children"].append(nodeIdx)
-        
-        nodes.append(node)
-            
 
-    #switch nodes
+        nodes.append(node)
+
     for i, node in enumerate(nodes):
         if "matrix" in node:
             t, r, s = decompose_matrix(node["matrix"])
@@ -488,17 +463,10 @@ def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=No
         "accessors": accessors,
         "meshes": meshes,
         "nodes": nodes,
-        "skins": skins,
-        "animations": animations,
+        **({"skins": skins} if skins else {}),
+        **({"animations": animations} if animations else {}),
         "scenes": [{"nodes": scene}],
     }
-    
-    if skins == []:
-        del gltf["skins"]
-    if animations == []:
-        del gltf["animations"]
-
-    #gltf = {k: v for k, v in data.items() if v is not None}
 
     # Save glTF
     output_file = Path(f"output/{main_name}.gltf")
@@ -506,5 +474,3 @@ def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=No
 
     with output_file.open("w") as f:
         json.dump(gltf, f, indent=2)
-
-    #print("Conversion done!")
