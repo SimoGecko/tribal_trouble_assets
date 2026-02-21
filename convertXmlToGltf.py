@@ -17,17 +17,8 @@ bone_to_joint = None # needed by Mesh and Animation. boneName => jointIndex
 def warn(msg):
     print(f"\033[38;5;208mWARNING: {msg}\033[0m")
 
-def fuzzyEq(a, b, eps=1e-5):
-    if isinstance(a, (list, tuple)) and isinstance(b, (list, tuple)):
-        return len(a) == len(b) and all(abs(x - y) < eps for x, y in zip(a, b))
-    return abs(a - b) < eps
-
 def clean(x, eps=1e-5):
-    for v in [0, 1, -1]:
-        if abs(x - v) < eps:
-            return v
-    return round(x, 6)
-    #return 0 if abs(x) < eps else 1 if abs(1-x) < eps else round(x, 6)
+    return 0 if abs(x) < eps else 1 if abs(1-x) < eps else round(x, 6)
 
 def clean_TRS(t, r, s, eps=1e-5):
     t = [clean(x) for x in t]
@@ -408,29 +399,32 @@ def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=No
         }
 
         for bone_index in range(len(bone_to_joint)):  # bones
+            i = bone_index
             # collect TRS per frame
             translations, rotations, scales = [], [], []
-            i = bone_index
             for matrices in frames:
                 mat = inverseMult(matrices[parents[i]], matrices[i]) if parents[i] != -1 else matrices[i]
 
                 t, r, s = decompose_matrix(mat)
+                t, r, s = clean_TRS(t, r, s)
                 translations.append(t)
                 rotations.append(r)
                 scales.append(s)
             
-            # add accessors for times and values
-            trans_accessor = addAccessor(translations, "VEC3f", "Anim")
-            rot_accessor   = addAccessor(rotations, "VEC4f", "Anim")
-            scale_accessor = addAccessor(scales, "VEC3f", "Anim")
+            channels = ["translation", "rotation", "scale"]
+            values = [translations, rotations, scales]
+            types = ["VEC3f", "VEC4f", "VEC3f"]
+            identities = [[0,0,0], [0,0,0,1], [1,1,1]]
             
-            anim_accessors += 3
-            
-            for accessor, path in zip([trans_accessor, rot_accessor, scale_accessor], ["translation", "rotation", "scale"]):
+            for channel, value, type, identity in zip(channels, values, types, identities):
+                if all(v == identity for v in value):
+                    continue
+                accessor_idx = addAccessor(value, type, "Anim")
                 sampler_idx = len(animation["samplers"])
-                animation["samplers"].append({"input": time_accessor, "output": accessor, "interpolation": "LINEAR"})
-                animation["channels"].append({"sampler": sampler_idx, "target": {"node": joints[bone_index], "path": path}})
-
+                animation["samplers"].append({"input": time_accessor, "output": accessor_idx, "interpolation": "LINEAR"})
+                animation["channels"].append({"sampler": sampler_idx, "target": {"node": joints[bone_index], "path": channel}})
+                anim_accessors += 1
+            
         animations.append(animation)
 
     print("anim accessors: ", anim_accessors)
@@ -485,11 +479,11 @@ def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=No
         if "matrix" in node:
             t, r, s = decompose_matrix(node["matrix"])
             t, r, s = clean_TRS(t, r, s)
-            if not fuzzyEq(t, [0, 0, 0]):
+            if t != [0, 0, 0]:
                 node["translation"] = t
-            if not fuzzyEq(r, [0, 0, 0, 1]):
+            if r != [0, 0, 0, 1]:
                 node["rotation"] = r
-            if not fuzzyEq(s, [1, 1, 1]):
+            if s != [1, 1, 1]:
                 node["scale"] = s
             del node["matrix"]
 
