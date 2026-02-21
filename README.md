@@ -1,11 +1,11 @@
 # Tribal Trouble Assets
 
-This repo provides a script to convert the `xml` based format of Tribal Trouble assets into a `glTF` compliant format for ease of use in modern game engines.
-Converted assets are also provided release section.
+This repository provides a **script to convert Tribal Trouble assets from their original XML format into glTF**, making them easier to use in modern game engines.  
+Converted assets are also provided in the [Releases](#) section.  
 
 ## Assets
 
-The following assets are available:
+The following assets are included:
 
 #### Vikings
 ![assets_vikings](images/assets_vikings.png)
@@ -16,22 +16,26 @@ The following assets are available:
 #### Misc
 ![assets_misc](images/assets_misc.png)
 
-- low-poly versions of most assets are included
-- buildings have half-built versions also included
+- Most assets include **low-poly versions**.  
+- Buildings also include **half-built variants**.
 
 ## Animations
-Characters are skinned, and have a skeleton and multiple animations.
+Character models are **skinned** and include a **skeleton with multiple animations**.  
 
 ![natives_warrior_run](images/natives_warrior_run.gif)
 
 ## Running the script
 
-- download the files locally
-- run `py main.py` to create `output/` containing all assets
+1. Download the repository to your local machine.  
+2. run `py main.py`
+This will generate an output/ folder containing all converted assets.
 
-## Notes
-- you might need to adjust the path inside `main.py` to point to your local `tribaltrouble/tt` directory. Download the original files at https://github.com/sunenielsen/tribaltrouble
-- some `.xml` skeleton files contain invalid skeletons. To correct them:
+### Notes
+- You might need to adjust the path inside `main.py` to point to your local `tribaltrouble/tt` directory.
+Original files can be downloaded from https://github.com/sunenielsen/tribaltrouble
+- Some `.xml` skeleton files contain invalid skeletons. To correct them:
 	- `peon_skeleton.xml`: replace line 59 `peon bip L Finger0` with `peon bip L Hand`
 	- `chicken_skeleton.xml`: replace lines 38-39 `chickenBip R/L Clavicle` with `chickenBip Spine`
-- the `geometry.xml` file is used to build and combine the assets. The one under `tt/geometry` works but separates many files out. To use an up-to-date version, use the one in this repository.
+- The `geometry.xml` file is used to build and combine the assets.
+	- The one under `tt/geometry` works but splits many assets into separate files.
+	- For an up-to-date version, use the one included in this repository.
