@@ -1,6 +1,8 @@
 TODO:
-  ☐ if lowpoly, don't add to scene @high
-  ☐ include texture @low
+  ❌ if lowpoly, don't add to scene @high
+    blender imports all assets if not in the scene, but unity doesn't
+  ❌ include texture @low
+    paths would be relative, there would be duplication in materials
   ✔ remove const values (anim + nodes, size=1, translation=0) @low
   ✔ fix warnings (1) in GLTF @high
   ✔ support multi-mesh in skeletons @high
