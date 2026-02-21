@@ -150,6 +150,12 @@ def parseSkeleton(filename):
         names.append(bone.attrib["name"])
         parentNames.append(bone.attrib["parent"])
 
+    # some skeletons have incorrect parenting so we are hardcoding the corrections here
+    for i, (n, p) in enumerate(zip(names, parentNames)):
+        if n == "peon bip L Finger01"   and p == "peon bip L Finger0":    parentNames[i] = "peon bip L Hand"
+        if n == "chickenBip L UpperArm" and p == "chickenBip L Clavicle": parentNames[i] = "chickenBip Spine"
+        if n == "chickenBip R UpperArm" and p == "chickenBip R Clavicle": parentNames[i] = "chickenBip Spine"
+
     roots = list(set(parentNames) - set(names))
     if len(roots) != 1:
         warn(f"expected 1 root bone, found {len(roots)}: {roots}")
@@ -387,6 +393,7 @@ def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=No
             for channel, value, type, identity in zip(channels, values, types, identities):
                 if all(v == identity for v in value):
                     continue
+                # TODO: could only store a single value if they are all the same
                 accessor_idx = addAccessor(value, type, "Anim")
                 sampler_idx = len(animation["samplers"])
                 animation["samplers"].append({"input": time_accessor, "output": accessor_idx, "interpolation": "LINEAR"})
