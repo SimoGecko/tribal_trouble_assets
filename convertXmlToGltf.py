@@ -17,6 +17,24 @@ bone_to_joint = None # needed by Mesh and Animation. boneName => jointIndex
 def warn(msg):
     print(f"\033[38;5;208mWARNING: {msg}\033[0m")
 
+def fuzzyEq(a, b, eps=1e-5):
+    if isinstance(a, (list, tuple)) and isinstance(b, (list, tuple)):
+        return len(a) == len(b) and all(abs(x - y) < eps for x, y in zip(a, b))
+    return abs(a - b) < eps
+
+def clean(x, eps=1e-5):
+    for v in [0, 1, -1]:
+        if abs(x - v) < eps:
+            return v
+    return round(x, 6)
+    #return 0 if abs(x) < eps else 1 if abs(1-x) < eps else round(x, 6)
+
+def clean_TRS(t, r, s, eps=1e-5):
+    t = [clean(x) for x in t]
+    r = [clean(x) for x in r]
+    s = [clean(x) for x in s]
+    return t, r, s
+
 def parseMesh(filename, isSkinned = False):
     tree = ET.parse(filename)
     root = tree.getroot()
@@ -466,10 +484,13 @@ def convertXmlToGltf(main_name, mesh_files, texture_files=None, skeleton_file=No
     for i, node in enumerate(nodes):
         if "matrix" in node:
             t, r, s = decompose_matrix(node["matrix"])
-            node["translation"] = t
-            node["rotation"] = r
-            node["scale"] = s
-            # TODO: if s is ~[1,1,1], remove it. same if values are ~0
+            t, r, s = clean_TRS(t, r, s)
+            if not fuzzyEq(t, [0, 0, 0]):
+                node["translation"] = t
+            if not fuzzyEq(r, [0, 0, 0, 1]):
+                node["rotation"] = r
+            if not fuzzyEq(s, [1, 1, 1]):
+                node["scale"] = s
             del node["matrix"]
 
     # ---- end iteration
